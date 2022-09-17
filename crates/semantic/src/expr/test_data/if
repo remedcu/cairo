@@ -1,0 +1,61 @@
+
+
+//! > ==========================================================================
+
+//! > Test unsupported if.
+
+//! > Comments
+// TODO(yuval): Fix span.
+
+//! > test_function_name
+test_function_diagnostics
+
+//! > function
+func foo(x: felt, y: felt) -> felt {
+    if x == y {
+        1
+    } else {
+        2
+    }
+}
+
+//! > function_name
+foo
+
+//! > module_code
+
+//! > expected_diagnostics
+error: Only simple "if" conditions (<expr> == 0) are currently supported.
+ --> lib.cairo:2:13
+    if x == y {
+            ^
+
+//! > ==========================================================================
+
+//! > Test unsupported if (2).
+
+//! > Comments
+// TODO(yuval): Fix span.
+
+//! > test_function_name
+test_function_diagnostics
+
+//! > function
+func foo(x: felt, y: felt) -> felt {
+    if abc {
+        1
+    } else {
+        2
+    }
+}
+
+//! > function_name
+foo
+
+//! > module_code
+
+//! > expected_diagnostics
+error: Only simple "if" conditions (<expr> == 0) are currently supported.
+ --> lib.cairo:2:8
+    if abc {
+       ^*^

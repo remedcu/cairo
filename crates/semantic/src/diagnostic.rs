@@ -146,6 +146,9 @@ impl DiagnosticEntry for SemanticDiagnostic {
                     actual_enum.full_path(db.upcast())
                 )
             }
+            SemanticDiagnosticKind::UnsupportedIf => {
+                r#"Only simple "if" conditions (<expr> == 0) are currently supported."#.into()
+            }
         }
     }
 
@@ -192,4 +195,5 @@ pub enum SemanticDiagnosticKind {
     UnexpectedStructPattern { ty: semantic::TypeId },
     UnexpectedTuplePattern { ty: semantic::TypeId },
     WrongEnum { expected_enum: EnumId, actual_enum: EnumId },
+    UnsupportedIf,
 }

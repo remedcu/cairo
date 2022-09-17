@@ -338,9 +338,44 @@ pub fn maybe_compute_expr_semantic(
                 stable_ptr: expr_match.stable_ptr().into(),
             })
         }
-        ast::Expr::If(_expr_if) => {
-            ctx.diagnostics.report(syntax, Unsupported);
-            return None;
+        ast::Expr::If(expr_if) => {
+            let condition = match expr_if.condition(syntax_db) {
+                ast::Expr::Binary(expr_binary)
+                    if matches!(expr_binary.op(syntax_db), BinaryOperator::EqEq(_)) =>
+                {
+                    expr_binary
+                }
+                expr => {
+                    ctx.diagnostics.report(&expr, UnsupportedIf);
+                    // TODO(lior): Continue with the semantic analysis of the if, instead of
+                    //   returning.
+                    return None;
+                }
+            };
+
+            match condition.rhs(syntax_db) {
+                ast::Expr::Literal(literal_syntax)
+                    if literal_to_semantic(ctx, &literal_syntax)?.value == 0 => {}
+                rhs => {
+                    ctx.diagnostics.report(&rhs, UnsupportedIf);
+                }
+            }
+
+            let matched_expr = compute_expr_semantic(ctx, &condition.lhs(syntax_db));
+            let matched_expr_id = ctx.exprs.alloc(matched_expr);
+            let else_block_semantic =
+                compute_expr_semantic(ctx, &ast::Expr::Block(expr_if.else_block(syntax_db)));
+            let ty = else_block_semantic.ty().clone(); // TODO: make sure both are of the same type.
+            let arms = vec![MatchArm {
+                pattern: Pattern::Otherwise(PatternOtherwise { ty }),
+                expression: ctx.exprs.alloc(else_block_semantic),
+            }];
+            semantic::Expr::ExprMatch(semantic::ExprMatch {
+                matched_expr: matched_expr_id,
+                arms,
+                ty,
+                stable_ptr: expr_if.stable_ptr().into(),
+            })
         }
         ast::Expr::Missing(_) => {
             ctx.diagnostics.report(syntax, Unsupported);
