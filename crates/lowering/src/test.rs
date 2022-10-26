@@ -9,14 +9,14 @@ use crate::lower::lower;
 utils::test_file_test!(
     lowering_test,
     [
-        "src/test_data/assignment",
-        "src/test_data/call",
-        "src/test_data/enums",
-        "src/test_data/extern",
-        "src/test_data/if",
+        // "src/test_data/assignment",
+        // "src/test_data/call",
+        // "src/test_data/enums",
+        // "src/test_data/extern",
+        // "src/test_data/if",
         "src/test_data/match",
-        "src/test_data/tests",
-        "src/test_data/tuple",
+        // "src/test_data/tests",
+        // "src/test_data/tuple",
     ],
     SemanticDatabaseForTesting,
     test_function_lowering

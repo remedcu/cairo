@@ -49,7 +49,7 @@ error: Missing tokens. Expected an expression.
     match MyStruct{a: 1} {
                        ^
 
-error: Missing token TerminalUnderscore.
+error: Missing token TerminalLiteralNumber.
  --> dummy_file.cairo:8:19
       bool::False() => {}
                   ^

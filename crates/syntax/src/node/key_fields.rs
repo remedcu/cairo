@@ -163,8 +163,6 @@ pub fn get_key_fields(kind: SyntaxKind, children: Vec<GreenId>) -> Vec<GreenId> 
         SyntaxKind::TerminalEq => vec![],
         SyntaxKind::TokenSemicolon => vec![],
         SyntaxKind::TerminalSemicolon => vec![],
-        SyntaxKind::TokenUnderscore => vec![],
-        SyntaxKind::TerminalUnderscore => vec![],
         SyntaxKind::TokenLBrace => vec![],
         SyntaxKind::TerminalLBrace => vec![],
         SyntaxKind::TokenRBrace => vec![],

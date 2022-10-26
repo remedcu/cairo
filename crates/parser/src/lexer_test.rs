@@ -12,7 +12,7 @@ use crate::utils::SimpleParserDatabase;
 
 fn terminal_kind_to_text(kind: SyntaxKind) -> Vec<&'static str> {
     match kind {
-        SyntaxKind::TerminalIdentifier => vec!["abc", "_az12f", "A90g5__"],
+        SyntaxKind::TerminalIdentifier => vec!["_", "abc", "_az12f", "A90g5__"],
         SyntaxKind::TerminalLiteralNumber => {
             vec!["0", "9", "00", "1234567890123456789012345678901234567890"]
         }
@@ -51,7 +51,6 @@ fn terminal_kind_to_text(kind: SyntaxKind) -> Vec<&'static str> {
         SyntaxKind::TerminalOrOr => vec!["||"],
         SyntaxKind::TerminalPlus => vec!["+"],
         SyntaxKind::TerminalSemicolon => vec![";"],
-        SyntaxKind::TerminalUnderscore => vec!["_"],
         SyntaxKind::TerminalLBrace => vec!["{"],
         SyntaxKind::TerminalRBrace => vec!["}"],
         SyntaxKind::TerminalLBrack => vec!["["],
@@ -107,7 +106,6 @@ fn terminal_kinds() -> Vec<SyntaxKind> {
         SyntaxKind::TerminalDotDot,
         SyntaxKind::TerminalEq,
         SyntaxKind::TerminalSemicolon,
-        SyntaxKind::TerminalUnderscore,
         SyntaxKind::TerminalLBrace,
         SyntaxKind::TerminalRBrace,
         SyntaxKind::TerminalLBrack,
@@ -171,7 +169,6 @@ fn is_identifier_like(kind: SyntaxKind) -> bool {
             | SyntaxKind::TerminalIf
             | SyntaxKind::TerminalElse
             | SyntaxKind::TerminalUse
-            | SyntaxKind::TerminalUnderscore
     )
 }
 

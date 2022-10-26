@@ -157,8 +157,8 @@ pub fn get_spec() -> Vec<Node> {
         // TODO(spapini): Support "Or" patterns (e.g. 1 | 2).
         // TODO(spapini): Support tuple patterns (e.g. (x, _)).
         EnumBuilder::new("Pattern")
-            .node_with_explicit_kind("Underscore", "TerminalUnderscore")
             .node_with_explicit_kind("Literal", "TerminalLiteralNumber")
+            // TODO(yg): this is never used. Remove either this of Path variant.
             .node("Identifier")
             .node("Struct")
             .node("Tuple")
@@ -436,7 +436,6 @@ pub fn get_spec() -> Vec<Node> {
     append_terminal_and_token(&mut nodes, "DotDot");
     append_terminal_and_token(&mut nodes, "Eq");
     append_terminal_and_token(&mut nodes, "Semicolon");
-    append_terminal_and_token(&mut nodes, "Underscore");
     append_terminal_and_token(&mut nodes, "LBrace");
     append_terminal_and_token(&mut nodes, "RBrace");
     append_terminal_and_token(&mut nodes, "LBrack");

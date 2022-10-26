@@ -159,8 +159,6 @@ pub enum SyntaxKind {
     TerminalEq,
     TokenSemicolon,
     TerminalSemicolon,
-    TokenUnderscore,
-    TerminalUnderscore,
     TokenLBrace,
     TerminalLBrace,
     TokenRBrace,
@@ -229,7 +227,6 @@ impl SyntaxKind {
                 | SyntaxKind::TerminalDotDot
                 | SyntaxKind::TerminalEq
                 | SyntaxKind::TerminalSemicolon
-                | SyntaxKind::TerminalUnderscore
                 | SyntaxKind::TerminalLBrace
                 | SyntaxKind::TerminalRBrace
                 | SyntaxKind::TerminalLBrack
@@ -293,7 +290,6 @@ impl SyntaxKind {
                 | SyntaxKind::TokenDotDot
                 | SyntaxKind::TokenEq
                 | SyntaxKind::TokenSemicolon
-                | SyntaxKind::TokenUnderscore
                 | SyntaxKind::TokenLBrace
                 | SyntaxKind::TokenRBrace
                 | SyntaxKind::TokenLBrack

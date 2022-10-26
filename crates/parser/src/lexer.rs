@@ -134,7 +134,6 @@ impl<'a> Lexer<'a> {
             "implicits" => TokenKind::Implicits,
             "ref" => TokenKind::Ref,
             "mut" => TokenKind::Mut,
-            "_" => TokenKind::Underscore,
             _ => TokenKind::Identifier,
         }
     }
@@ -299,7 +298,6 @@ enum TokenKind {
     DotDot,
     Eq,
     Semicolon,
-    Underscore,
     LBrace,
     RBrace,
     LBrack,
@@ -354,7 +352,6 @@ fn token_kind_to_terminal_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::DotDot => SyntaxKind::TerminalDotDot,
         TokenKind::Eq => SyntaxKind::TerminalEq,
         TokenKind::Semicolon => SyntaxKind::TerminalSemicolon,
-        TokenKind::Underscore => SyntaxKind::TerminalUnderscore,
         TokenKind::LBrace => SyntaxKind::TerminalLBrace,
         TokenKind::RBrace => SyntaxKind::TerminalRBrace,
         TokenKind::LBrack => SyntaxKind::TerminalLBrack,

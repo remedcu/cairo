@@ -81,7 +81,6 @@ fn set_color(text: SmolStr, kind: SyntaxKind) -> ColoredString {
         | SyntaxKind::TokenColonColon
         | SyntaxKind::TokenDotDot
         | SyntaxKind::TokenSemicolon
-        | SyntaxKind::TokenUnderscore
         | SyntaxKind::TokenAnd
         | SyntaxKind::TokenNot => text.truecolor(255, 180, 255), // Pink
         SyntaxKind::TokenEq

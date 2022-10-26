@@ -112,6 +112,10 @@ impl Environment {
         ast_param: &ast::Param,
         function_id: GenericFunctionId,
     ) -> bool {
+        if name == "_" {
+            return true;
+        }
+
         match self.variables.entry(name.clone()) {
             std::collections::hash_map::Entry::Occupied(_) => {
                 diagnostics.report(
@@ -466,7 +470,6 @@ fn compute_pattern_semantic(
     // TODO(spapini): Check for missing type, and don't reemit an error.
     let syntax_db = ctx.db.upcast();
     Some(match pattern_syntax {
-        ast::Pattern::Underscore(_) => Pattern::Otherwise(PatternOtherwise { ty }),
         ast::Pattern::Literal(literal_pattern) => {
             let literal = literal_to_semantic(ctx, &literal_pattern)?;
             if ty != core_felt_ty(ctx.db) {
@@ -523,8 +526,13 @@ fn compute_pattern_semantic(
             }
             // TODO(spapini): Make sure this is a simple identifier. In particular, no generics.
             let identifier = path.elements(syntax_db)[0].identifier_ast(syntax_db);
-            create_variable_pattern(ctx, identifier, &[], ty)
+            if identifier.text(syntax_db) == "_" {
+                Pattern::Otherwise(PatternOtherwise { ty })
+            } else {
+                create_variable_pattern(ctx, identifier, &[], ty)
+            }
         }
+        // TODO(yg): this never happens
         ast::Pattern::Identifier(identifier) => create_variable_pattern(
             ctx,
             identifier.name(syntax_db),

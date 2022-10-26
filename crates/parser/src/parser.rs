@@ -572,7 +572,6 @@ impl<'a> Parser<'a> {
         // TODO(yuval): Support tuple and "Or" patterns.
         Some(match self.peek().kind {
             SyntaxKind::TerminalLiteralNumber => self.take::<TerminalLiteralNumber>().into(),
-            SyntaxKind::TerminalUnderscore => self.take::<TerminalUnderscore>().into(),
             SyntaxKind::TerminalIdentifier => {
                 // TODO(ilya): Consider parsing a single identifier as PatternIdentifier rather
                 // then ExprPath.
@@ -624,10 +623,11 @@ impl<'a> Parser<'a> {
     }
     /// Returns a GreenId of a node with some Pattern kind (see [syntax::node::ast::Pattern]).
     fn parse_pattern(&mut self) -> PatternGreen {
-        // If not found, return a missing underscore pattern.
+        // If not found, return a missing literal pattern.
+        // TODO(yuval): we should have empty variant for pattern.
         self.try_parse_pattern().unwrap_or_else(|| {
-            self.create_and_report_missing::<TerminalUnderscore>(
-                ParserDiagnosticKind::MissingToken(SyntaxKind::TerminalUnderscore),
+            self.create_and_report_missing::<TerminalLiteralNumber>(
+                ParserDiagnosticKind::MissingToken(SyntaxKind::TerminalLiteralNumber),
             )
             .into()
         })

@@ -115,7 +115,9 @@
     │   │       │   │   │   │   │       └── rbrace (kind: TokenRBrace): '}'
     │   │       │   │   │   │   ├── separator #0 (kind: TokenComma): ','
     │   │       │   │   │   │   ├── item #1 (kind: MatchArm)
-    │   │       │   │   │   │   │   ├── pattern (kind: TokenUnderscore): '_'
+    │   │       │   │   │   │   │   ├── pattern (kind: ExprPath)
+    │   │       │   │   │   │   │   │   └── item #0 (kind: PathSegmentSimple)
+    │   │       │   │   │   │   │   │       └── ident (kind: TokenIdentifier): '_'
     │   │       │   │   │   │   │   ├── arrow (kind: TokenMatchArrow): '=>'
     │   │       │   │   │   │   │   └── expression (kind: TokenLiteralNumber): '0'
     │   │       │   │   │   │   └── separator #1 (kind: TokenComma): ','
