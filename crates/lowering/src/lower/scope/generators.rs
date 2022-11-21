@@ -22,7 +22,7 @@ pub struct Literal {
     pub ty: semantic::TypeId,
 }
 impl Literal {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
+    pub fn add_statement(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
         let output = scope.living_variables.introduce_new_var(ctx, self.ty);
         scope.statements.push(Statement::Literal(StatementLiteral {
             value: self.value,
@@ -45,7 +45,11 @@ pub struct Call {
 }
 impl Call {
     /// Adds a call statement to the scope.
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> CallResult {
+    pub fn add_statement(
+        self,
+        ctx: &mut LoweringContext<'_>,
+        scope: &mut BlockScope,
+    ) -> CallResult {
         let inputs = self
             .inputs
             .into_iter()
@@ -111,7 +115,11 @@ pub enum CallBlockResult {
     End,
 }
 impl CallBlock {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> CallBlockResult {
+    pub fn add_statement(
+        self,
+        ctx: &mut LoweringContext<'_>,
+        scope: &mut BlockScope,
+    ) -> CallBlockResult {
         let (outputs, res) = process_end_info(ctx, scope, self.end_info);
 
         // TODO(spapini): Support mut variables.
@@ -130,7 +138,11 @@ pub struct MatchExtern {
     pub end_info: BlockEndInfo,
 }
 impl MatchExtern {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> CallBlockResult {
+    pub fn add_statement(
+        self,
+        ctx: &mut LoweringContext<'_>,
+        scope: &mut BlockScope,
+    ) -> CallBlockResult {
         let inputs = self
             .inputs
             .into_iter()
@@ -181,7 +193,7 @@ pub struct EnumConstruct {
     pub variant: ConcreteVariant,
 }
 impl EnumConstruct {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
+    pub fn add_statement(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
         let input = scope.living_variables.use_var(ctx, self.input).var_id();
         let output = scope.living_variables.introduce_new_var(
             ctx,
@@ -206,7 +218,11 @@ pub struct MatchEnum {
     pub end_info: BlockEndInfo,
 }
 impl MatchEnum {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> CallBlockResult {
+    pub fn add_statement(
+        self,
+        ctx: &mut LoweringContext<'_>,
+        scope: &mut BlockScope,
+    ) -> CallBlockResult {
         let input = scope.living_variables.use_var(ctx, self.input).var_id();
 
         // Check that each arm has a single input of the correct type.
@@ -233,7 +249,11 @@ pub struct StructDestructure {
     pub tys: Vec<semantic::TypeId>,
 }
 impl StructDestructure {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> Vec<LivingVar> {
+    pub fn add_statement(
+        self,
+        ctx: &mut LoweringContext<'_>,
+        scope: &mut BlockScope,
+    ) -> Vec<LivingVar> {
         let input = scope.living_variables.use_var(ctx, self.input).var_id();
         let outputs: Vec<_> = self
             .tys
@@ -255,9 +275,9 @@ pub struct StructMemberAccess {
     pub member_idx: usize,
 }
 impl StructMemberAccess {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
+    pub fn add_statement(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
         StructDestructure { input: self.input, tys: self.member_tys }
-            .add(ctx, scope)
+            .add_statement(ctx, scope)
             .remove(self.member_idx)
     }
 }
@@ -268,7 +288,7 @@ pub struct StructConstruct {
     pub ty: semantic::TypeId,
 }
 impl StructConstruct {
-    pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
+    pub fn add_statement(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> LivingVar {
         let inputs = self
             .inputs
             .into_iter()

@@ -25,10 +25,12 @@ use crate::diagnostic::LoweringDiagnosticKind::*;
 use crate::diagnostic::{LoweringDiagnostic, LoweringDiagnostics};
 use crate::objects::{Block, BlockId, Variable};
 
-mod context;
+pub mod context;
 mod external;
 pub mod implicits;
 mod lower_if;
+pub mod new_context;
+pub mod new_scope;
 mod scope;
 mod semantic_map;
 mod variables;
@@ -161,7 +163,7 @@ fn lower_block(
     }
 }
 
-/// Lowers an expression that is either a complete block, or the end (tail expreesion) of a
+/// Lowers an expression that is either a complete block, or the end (tail expression) of a
 /// block.
 pub fn lower_tail_expr(
     ctx: &mut LoweringContext<'_>,
@@ -248,7 +250,7 @@ fn get_full_return_vars(
 
 // TODO:(spapini): Separate match pattern from non-match (single) patterns in the semantic
 // model.
-/// Lowers a single-pattern (pattern that does not appear in a match. This includes structs,
+/// Lowers a single-pattern (pattern that does not appear in a match). This includes structs,
 /// tuples, variables, etc...
 /// Adds the bound variables to the scope.
 /// Note that single patterns are the only way to bind new local variables in the semantic
@@ -279,7 +281,7 @@ fn lower_single_pattern(
                 input: lowered_expr.var(ctx, scope),
                 tys: members.iter().map(|(_, member)| member.ty).collect(),
             }
-            .add(ctx, scope)
+            .add_statement(ctx, scope)
             .into_iter()
             .zip(members.into_iter())
             .for_each(|(var, (_, member))| {
@@ -294,7 +296,7 @@ fn lower_single_pattern(
             } else {
                 let tys = extract_matches!(ctx.db.lookup_intern_type(*ty), TypeLongId::Tuple);
                 generators::StructDestructure { input: lowered_expr.var(ctx, scope), tys }
-                    .add(ctx, scope)
+                    .add_statement(ctx, scope)
                     .into_iter()
                     .map(LoweredExpr::AtVariable)
                     .collect()
@@ -330,7 +332,8 @@ fn lower_expr(
             expr.stable_ptr.untyped(),
         )?)),
         semantic::Expr::Literal(expr) => Ok(LoweredExpr::AtVariable(
-            generators::Literal { value: expr.value.clone(), ty: expr.ty }.add(ctx, scope),
+            generators::Literal { value: expr.value.clone(), ty: expr.ty }
+                .add_statement(ctx, scope),
         )),
         semantic::Expr::MemberAccess(expr) => lower_expr_member_access(ctx, expr, scope),
         semantic::Expr::StructCtor(expr) => lower_expr_struct_ctor(ctx, expr, scope),
@@ -374,7 +377,7 @@ fn lower_expr_block(
         block: block_finalized.block,
         end_info: finalized_merger.end_info.clone(),
     };
-    let block_result = call_block_generator.add(ctx, scope);
+    let block_result = call_block_generator.add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -462,15 +465,16 @@ fn perform_function_call(
         ctx.db.lookup_intern_function(function).function,
         semantic::ConcreteFunction { generic_function: GenericFunctionId::Extern(_), .. }
     ) {
-        let call_result =
-            generators::Call { function, inputs, ref_tys, ret_tys: vec![ret_ty] }.add(ctx, scope);
+        let call_result = generators::Call { function, inputs, ref_tys, ret_tys: vec![ret_ty] }
+            .add_statement(ctx, scope);
         let res = LoweredExpr::AtVariable(call_result.returns.into_iter().next().unwrap());
         return (call_result.implicit_outputs, call_result.ref_outputs, res);
     };
 
     // Extern function
     let ret_tys = extern_facade_return_tys(ctx, ret_ty);
-    let call_result = generators::Call { function, inputs, ref_tys, ret_tys }.add(ctx, scope);
+    let call_result =
+        generators::Call { function, inputs, ref_tys, ret_tys }.add_statement(ctx, scope);
     (
         call_result.implicit_outputs,
         call_result.ref_outputs,
@@ -536,7 +540,7 @@ fn lower_expr_match(
         arms,
         end_info: finalized_merger.end_info.clone(),
     };
-    let block_result = match_generator.add(ctx, scope);
+    let block_result = match_generator.add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -600,7 +604,7 @@ fn lower_optimized_extern_match(
         arms,
         end_info: finalized_merger.end_info.clone(),
     }
-    .add(ctx, scope);
+    .add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -664,7 +668,7 @@ fn lower_expr_match_felt(
         arms: vec![block0_finalized.block, block_otherwise_finalized.block],
         end_info: finalized_merger.end_info.clone(),
     };
-    let block_result = match_generator.add(ctx, scope);
+    let block_result = match_generator.add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -724,7 +728,7 @@ fn lower_expr_enum_ctor(
             input: lower_expr(ctx, scope, expr.value_expr)?.var(ctx, scope),
             variant: expr.variant.clone(),
         }
-        .add(ctx, scope),
+        .add_statement(ctx, scope),
     ))
 }
 
@@ -746,7 +750,7 @@ fn lower_expr_member_access(
             member_tys: members.into_iter().map(|(_, member)| member.ty).collect(),
             member_idx,
         }
-        .add(ctx, scope),
+        .add_statement(ctx, scope),
     ))
 }
 
@@ -769,7 +773,7 @@ fn lower_expr_struct_ctor(
                 .collect::<Result<Vec<_>, _>>()?,
             ty: expr.ty,
         }
-        .add(ctx, scope),
+        .add_statement(ctx, scope),
     ))
 }
 
@@ -807,7 +811,7 @@ fn lower_expr_error_propagate(
                             input: var,
                             variant: expr.func_err_variant.clone(),
                         }
-                        .add(ctx, subscope);
+                        .add_statement(ctx, subscope);
                         Some(BlockScopeEnd::Return(
                             get_full_return_vars(ctx, subscope, vec![value_var]).ok()?,
                         ))
@@ -827,7 +831,7 @@ fn lower_expr_error_propagate(
         arms,
         end_info: finalized_merger.end_info.clone(),
     };
-    let block_result = match_generator.add(ctx, scope);
+    let block_result = match_generator.add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -882,7 +886,7 @@ fn lower_optimized_extern_error_propagate(
                                 input,
                                 variant: expr.func_err_variant.clone(),
                             }
-                            .add(ctx, subscope);
+                            .add_statement(ctx, subscope);
                             Some(BlockScopeEnd::Return(
                                 get_full_return_vars(ctx, subscope, vec![value_var]).ok()?,
                             ))
@@ -899,7 +903,7 @@ fn lower_optimized_extern_error_propagate(
         arms,
         end_info: finalized_merger.end_info.clone(),
     }
-    .add(ctx, scope);
+    .add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 

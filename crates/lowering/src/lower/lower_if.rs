@@ -92,7 +92,7 @@ pub fn lower_expr_if_bool(
         ],
         end_info: finalized_merger.end_info.clone(),
     };
-    let block_result = match_generator.add(ctx, scope);
+    let block_result = match_generator.add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -119,7 +119,7 @@ pub fn lower_expr_if_eq_zero(
             ref_tys: vec![],
             ret_tys: vec![ret_ty],
         }
-        .add(ctx, scope);
+        .add_statement(ctx, scope);
         call_result.returns.into_iter().next().unwrap()
     };
 
@@ -156,7 +156,7 @@ pub fn lower_expr_if_eq_zero(
         arms: vec![main_finalized.block, else_finalized.block],
         end_info: finalized_merger.end_info.clone(),
     };
-    let block_result = match_generator.add(ctx, scope);
+    let block_result = match_generator.add_statement(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 

@@ -2,7 +2,6 @@ use id_arena::Arena;
 use itertools::{chain, zip_eq};
 use semantic::items::enm::SemanticEnumEx;
 use semantic::items::imp::ImplLookupContext;
-use utils::unordered_hash_map::UnorderedHashMap;
 
 use super::lowered_expr_from_block_result;
 use super::scope::{generators, BlockScope, BlockScopeEnd};
@@ -11,7 +10,7 @@ use crate::db::LoweringGroup;
 use crate::diagnostic::LoweringDiagnostics;
 use crate::lower::external::{extern_facade_expr, extern_facade_return_tys};
 use crate::lower::scope::BlockFlowMerger;
-use crate::objects::{Block, Variable};
+use crate::new_objects::{Block, Variable};
 
 /// Context for the lowering phase of a free function.
 pub struct LoweringContext<'db> {
@@ -24,13 +23,6 @@ pub struct LoweringContext<'db> {
     pub variables: Arena<Variable>,
     /// Arena of allocated lowered blocks.
     pub blocks: Arena<Block>,
-    /// Definitions encountered for semantic variables.
-    // TODO(spapini): consider moving to semantic model.
-    pub semantic_defs: UnorderedHashMap<semantic::VarId, semantic::Variable>,
-    // TODO(spapini): Document. (excluding implicits).
-    pub ref_params: &'db [semantic::VarId],
-    // The available implicits in this function.
-    pub implicits: &'db [semantic::TypeId],
     // Lookup context for impls.
     pub lookup_context: ImplLookupContext,
 }
