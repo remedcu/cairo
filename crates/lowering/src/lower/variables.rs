@@ -5,7 +5,7 @@ use crate::{Variable, VariableId};
 
 /// Wrapper around VariableId, guaranteeing that the variable exists inside some [LivingVariables]
 /// struct. Thus, it does not implement copy nor clone.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LivingVar(VariableId);
 impl LivingVar {
     /// Duplicates the variable if it is duplicatable.

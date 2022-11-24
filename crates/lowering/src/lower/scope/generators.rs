@@ -211,6 +211,7 @@ impl MatchEnum {
 
         // Check that each arm has a single input of the correct type.
         for (variant, block_id) in &self.arms {
+            log::info!("iteration {variant:?}");
             let input_tys =
                 ctx.blocks[*block_id].inputs.iter().map(|var_id| ctx.variables[*var_id].ty);
             itertools::assert_equal([variant.ty].into_iter(), input_tys);

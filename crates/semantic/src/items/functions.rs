@@ -32,6 +32,16 @@ impl DebugWithDb<dyn SemanticGroup> for FunctionLongId {
 }
 
 define_short_id!(FunctionId, FunctionLongId, SemanticGroup, lookup_intern_function);
+impl FunctionId {
+    pub fn name(&self, db: &(dyn SemanticGroup + 'static)) -> SmolStr {
+        match db.lookup_intern_function(*self).function.generic_function {
+            GenericFunctionId::Free(f) => f.name(db.upcast()),
+            GenericFunctionId::Extern(f) => f.name(db.upcast()),
+            GenericFunctionId::TraitFunction(f) => f.name(db.upcast()),
+            GenericFunctionId::ImplFunction(f) => f.name(db.upcast()),
+        }
+    }
+}
 
 // TODO(spapini): Refactor to an enum.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

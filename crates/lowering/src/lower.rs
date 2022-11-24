@@ -1,3 +1,4 @@
+use debug::DebugWithDb;
 use defs::ids::{FreeFunctionId, GenericFunctionId, LanguageElementId};
 use diagnostics::Diagnostics;
 use id_arena::Arena;
@@ -9,7 +10,7 @@ use semantic::corelib::{
 };
 use semantic::items::enm::SemanticEnumEx;
 use semantic::items::imp::ImplLookupContext;
-use semantic::{ConcreteTypeId, GenericArgumentId, Mutability, TypeLongId, VarId};
+use semantic::{ConcreteTypeId, GenericArgumentId, Mutability, Pattern, TypeId, TypeLongId, VarId};
 use syntax::node::ids::SyntaxStablePtrId;
 use utils::unordered_hash_map::UnorderedHashMap;
 use utils::{extract_matches, try_extract_matches};
@@ -360,7 +361,13 @@ fn lower_expr(
         semantic::Expr::Tuple(expr) => lower_expr_tuple(ctx, expr, scope),
         semantic::Expr::Assignment(expr) => lower_expr_assignment(ctx, expr, scope),
         semantic::Expr::Block(expr) => lower_expr_block(ctx, scope, expr),
-        semantic::Expr::FunctionCall(expr) => lower_expr_function_call(ctx, expr, scope),
+        semantic::Expr::FunctionCall(expr) => {
+            // TODO(yg): use Shahar's help to add the function's name to the debug log. Consider
+            // adding for others too.
+            //
+            // expr.debug(ctx.db);
+            lower_expr_function_call(ctx, expr, scope)
+        }
         semantic::Expr::Match(expr) => lower_expr_match(ctx, expr, scope),
         semantic::Expr::If(expr) => lower_expr_if(ctx, scope, expr),
         semantic::Expr::Var(expr) => Ok(LoweredExpr::AtVariable(use_semantic_var(
@@ -555,20 +562,24 @@ fn lower_expr_match(
             // Create a sealed block for each arm.
             let block_opts =
                 zip_eq(&concrete_variants, &expr.arms).map(|(concrete_variant, arm)| {
-                    let semantic_var_id = extract_var_pattern(&arm.pattern, concrete_variant)?;
+                    let inner_pattern = extract_match_arm_pattern(&arm.pattern, concrete_variant);
+                    // TODO(yg): I think this shouldn't be flat...
+                    let flat_types = get_flat_types(ctx, concrete_variant.ty);
                     // Create a scope for the arm block.
-                    merger.run_in_subscope(
-                        ctx,
-                        vec![concrete_variant.ty],
-                        |ctx, subscope, variables| {
-                            // Bind the arm input variable to the semantic variable.
-                            let [var] = <[_; 1]>::try_from(variables).ok().unwrap();
-                            subscope.put_semantic_variable(semantic_var_id, var);
+                    merger.run_in_subscope(ctx, flat_types, |ctx, subscope, variables| {
+                        // Bind the arm input variables to the semantic variables.
+                        // for (semantic_var_id, living_var) in zip_eq(semantic_var_ids, variables)
+                        // {     subscope.
+                        // put_semantic_variable(semantic_var_id, living_var);
+                        // }
 
-                            // Lower the arm expression.
-                            lower_tail_expr(ctx, subscope, arm.expression)
-                        },
-                    )
+                        // TODO(yg): if this works - rename!
+                        let variant_expr = extern_facade_expr(ctx, concrete_variant.ty, variables);
+                        lower_single_pattern(ctx, subscope, &*inner_pattern, variant_expr);
+
+                        // Lower the arm expression.
+                        lower_tail_expr(ctx, subscope, arm.expression)
+                    })
                 });
             block_opts.collect::<Option<Vec<_>>>().ok_or(LoweringFlowError::Failed)
         });
@@ -617,12 +628,16 @@ fn lower_optimized_extern_match(
 
                     // Create a scope for the arm block.
                     merger.run_in_subscope(ctx, input_tys, |ctx, subscope, mut arm_inputs| {
-                        match_extern_arm_ref_args_rebind(&mut arm_inputs, &extern_enum, subscope);
-                        let variant_expr = extern_facade_expr(ctx, concrete_variant.ty, arm_inputs);
                         // TODO(spapini): Convert to a diagnostic.
                         let enum_pattern = extract_matches!(&arm.pattern, semantic::Pattern::Enum);
                         // TODO(spapini): Convert to a diagnostic.
                         assert_eq!(&enum_pattern.variant, concrete_variant, "Wrong variant");
+
+                        // Bind the arm inputs to the semantic variables and implicits.
+                        match_extern_arm_ref_args_rebind(&mut arm_inputs, &extern_enum, subscope);
+
+                        let variant_expr = extern_facade_expr(ctx, concrete_variant.ty, arm_inputs);
+
                         lower_single_pattern(
                             ctx,
                             subscope,
@@ -1019,7 +1034,7 @@ fn match_extern_variant_arm_input_types(
     chain!(extern_enum.implicits.clone(), ref_tys, variant_input_tys.into_iter()).collect()
 }
 
-/// Rebinds input references when matching on extern functions.
+/// Binds input references and implicits when matching on extern functions.
 fn match_extern_arm_ref_args_rebind(
     arm_inputs: &mut Vec<LivingVar>,
     extern_enum: &LoweredExprExternEnum,
@@ -1121,15 +1136,50 @@ fn lowered_expr_from_block_result(
     }
 }
 
-/// Checks that the pattern is an enum pattern for a concrete variant, and returns the semantic
-/// variable id.
-fn extract_var_pattern(
+/// Checks that the pattern is an enum variant pattern for a concrete variant, and returns the
+/// semantic variable id.
+fn extract_match_arm_pattern(
     pattern: &semantic::Pattern,
     concrete_variant: &semantic::ConcreteVariant,
-) -> Option<semantic::VarId> {
+) -> Box<semantic::Pattern> {
     let enum_pattern = extract_matches!(&pattern, semantic::Pattern::Enum);
     assert_eq!(&enum_pattern.variant, concrete_variant, "Wrong variant");
-    let var_pattern = extract_matches!(&*enum_pattern.inner_pattern, semantic::Pattern::Variable);
-    let semantic_var_id = semantic::VarId::Local(var_pattern.var.id);
-    Some(semantic_var_id)
+    enum_pattern.inner_pattern.clone()
+    // extract_pattern(&enum_pattern.inner_pattern)
+}
+
+/// Returns a flat vector of the semantic variable ids of the given pattern.
+fn extract_pattern(pattern: &Pattern) -> Vec<semantic::VarId> {
+    match pattern {
+        semantic::Pattern::Variable(var_pattern) => {
+            vec![semantic::VarId::Local(var_pattern.var.id)]
+        }
+        semantic::Pattern::Tuple(tup) => {
+            tup.field_patterns.iter().flat_map(|pat| extract_pattern(&*pat)).collect()
+        }
+        _ => unreachable!("not yet supported"),
+    }
+}
+
+// TODO(yg): remove
+// fn get_flat_tuple_types(tup: PatternTuple) -> Vec<TypeId> {
+//     let mut types = Vec::new();
+//     for field in tup.field_patterns {
+//         let types_to_add = match *field {
+//             semantic::Pattern::Variable(var_pattern) => vec![var_pattern.var.ty],
+//             semantic::Pattern::Tuple(tup) => get_flat_tuple_types(tup),
+//             _ => unreachable!("not yet supported"),
+//         };
+//         types.extend(types_to_add);
+//     }
+//     types
+// }
+
+fn get_flat_types(ctx: &mut LoweringContext<'_>, type_id: TypeId) -> Vec<TypeId> {
+    let ty = ctx.db.lookup_intern_type(type_id);
+    match ty {
+        TypeLongId::Concrete(_) => vec![type_id],
+        TypeLongId::Tuple(tup) => tup.into_iter().flat_map(|x| get_flat_types(ctx, x)).collect(),
+        _ => todo!(), // TODO(yg)
+    }
 }

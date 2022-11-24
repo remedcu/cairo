@@ -54,6 +54,8 @@ macro_rules! extract_matches {
         match $e {
             $variant(x) => x,
             ref e => {
+                // TODO(yg): in a separate PR, change to "extract_match failed:
+                // `{:?}` is not of of variant `{}`".
                 panic!("assertion failed: `{:?}` does not match `{}`", e, stringify!($variant))
             }
         }

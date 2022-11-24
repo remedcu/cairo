@@ -157,15 +157,20 @@ pub struct ExprBlock {
     pub stable_ptr: ast::ExprPtr,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, DebugWithDb)]
-#[debug_db(ExprFormatter<'_>)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+// #[debug_db(ExprFormatter<'_>)]
 pub struct ExprFunctionCall {
     pub function: FunctionId,
     pub ref_args: Vec<VarId>,
     pub args: Vec<ExprId>,
     pub ty: semantic::TypeId,
-    #[hide_field_debug_with_db]
+    // #[hide_field_debug_with_db]
     pub stable_ptr: ast::ExprPtr,
+}
+impl DebugWithDb<ExprFormatter<'_>> for ExprFunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _db: &ExprFormatter<'_>) -> std::fmt::Result {
+        write!(f, "yg name: {}", self.function.name(_db.db.upcast()))
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, DebugWithDb)]

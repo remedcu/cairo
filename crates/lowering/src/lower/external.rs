@@ -26,6 +26,7 @@ pub fn extern_facade_expr(
     returns: Vec<LivingVar>,
 ) -> LoweredExpr {
     if let semantic::TypeLongId::Tuple(_) = ctx.db.lookup_intern_type(ty) {
+        // TODO(yg): don't we need to check here that returns.len() = flat_types(ty).len()?
         LoweredExpr::Tuple(returns.into_iter().map(LoweredExpr::AtVariable).collect())
     } else {
         assert_eq!(returns.len(), 1);

@@ -40,7 +40,7 @@ pub struct LoweringContext<'db> {
 }
 
 /// Representation of the value of a computed expression.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum LoweredExpr {
     /// The expression value lies in a variable.
     AtVariable(LivingVar),
@@ -65,7 +65,7 @@ impl LoweredExpr {
 }
 
 /// Lazy expression value of an extern call returning an enum.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LoweredExprExternEnum {
     pub function: semantic::FunctionId,
     pub concrete_enum_id: semantic::ConcreteEnumId,
