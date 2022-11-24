@@ -343,7 +343,7 @@ fn lower_single_pattern(
                 lower_single_pattern(ctx, scope, pattern, var);
             }
         }
-        semantic::Pattern::Enum(_) => unreachable!(),
+        semantic::Pattern::EnumVariant(_) => unreachable!(),
         semantic::Pattern::Otherwise(_) => {}
     }
 }
@@ -410,11 +410,11 @@ fn lower_expr_block(
     let block_finalized = finalized_merger.finalize_block(ctx, block_sealed);
 
     // Emit the statement.
-    let call_block_generator = generators::CallBlock {
+    let block_result = generators::CallBlock {
         block: block_finalized.block,
         end_info: finalized_merger.end_info.clone(),
-    };
-    let block_result = call_block_generator.add(ctx, scope);
+    }
+    .add(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -556,35 +556,33 @@ fn lower_expr_match(
             let block_opts =
                 zip_eq(&concrete_variants, &expr.arms).map(|(concrete_variant, arm)| {
                     let semantic_var_id = extract_var_pattern(&arm.pattern, concrete_variant)?;
-                    // Create a scope for the arm block.
-                    merger.run_in_subscope(
-                        ctx,
-                        vec![concrete_variant.ty],
-                        |ctx, subscope, variables| {
-                            // Bind the arm input variable to the semantic variable.
-                            let [var] = <[_; 1]>::try_from(variables).ok().unwrap();
-                            subscope.put_semantic_variable(semantic_var_id, var);
+                    let input_tys = vec![concrete_variant.ty];
 
-                            // Lower the arm expression.
-                            lower_tail_expr(ctx, subscope, arm.expression)
-                        },
-                    )
+                    // Create a scope for the arm block.
+                    merger.run_in_subscope(ctx, input_tys, |ctx, subscope, variables| {
+                        // Bind the arm input variable to the semantic variable.
+                        let [var] = <[_; 1]>::try_from(variables).ok().unwrap();
+                        subscope.put_semantic_variable(semantic_var_id, var);
+
+                        // Lower the arm expression.
+                        lower_tail_expr(ctx, subscope, arm.expression)
+                    })
                 });
             block_opts.collect::<Option<Vec<_>>>().ok_or(LoweringFlowError::Failed)
         });
+
     let finalized_blocks =
         res?.into_iter().map(|sealed| finalized_merger.finalize_block(ctx, sealed).block);
-
     let arms = zip_eq(concrete_variants, finalized_blocks).collect();
 
     // Emit the statement.
-    let match_generator = generators::MatchEnum {
+    let block_result = generators::MatchEnum {
         input: expr_var,
         concrete_enum_id,
         arms,
         end_info: finalized_merger.end_info.clone(),
-    };
-    let block_result = match_generator.add(ctx, scope);
+    }
+    .add(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -617,16 +615,21 @@ fn lower_optimized_extern_match(
 
                     // Create a scope for the arm block.
                     merger.run_in_subscope(ctx, input_tys, |ctx, subscope, mut arm_inputs| {
-                        match_extern_arm_ref_args_rebind(&mut arm_inputs, &extern_enum, subscope);
+                        // TODO(spapini): Convert to a diagnostic.
+                        let enum_variant_pattern =
+                            extract_matches!(&arm.pattern, semantic::Pattern::EnumVariant);
+                        // TODO(spapini): Convert to a diagnostic.
+                        assert_eq!(
+                            &enum_variant_pattern.variant, concrete_variant,
+                            "Wrong variant"
+                        );
+
+                        match_extern_arm_ref_args_bind(&mut arm_inputs, &extern_enum, subscope);
                         let variant_expr = extern_facade_expr(ctx, concrete_variant.ty, arm_inputs);
-                        // TODO(spapini): Convert to a diagnostic.
-                        let enum_pattern = extract_matches!(&arm.pattern, semantic::Pattern::Enum);
-                        // TODO(spapini): Convert to a diagnostic.
-                        assert_eq!(&enum_pattern.variant, concrete_variant, "Wrong variant");
                         lower_single_pattern(
                             ctx,
                             subscope,
-                            &enum_pattern.inner_pattern,
+                            &enum_variant_pattern.inner_pattern,
                             variant_expr,
                         );
 
@@ -638,10 +641,13 @@ fn lower_optimized_extern_match(
         },
     );
 
-    let arms = blocks?
+    let finalized_blocks = blocks?
         .into_iter()
         .map(|sealed| finalized_merger.finalize_block(ctx, sealed).block)
-        .collect();
+        .collect_vec();
+    let arms = zip_eq(concrete_variants, finalized_blocks).collect();
+
+    // Emit the statement.
     let block_result = generators::MatchExtern {
         function: extern_enum.function,
         inputs: extern_enum.inputs,
@@ -705,14 +711,18 @@ fn lower_expr_match_felt(
     let block_otherwise_finalized = finalized_merger
         .finalize_block(ctx, block_otherwise_sealed.ok_or(LoweringFlowError::Failed)?);
 
+    let concrete_variants = extract_concrete_enum(ctx, expr)?.1;
+    let arms = zip_eq(concrete_variants, [block0_finalized.block, block_otherwise_finalized.block])
+        .collect();
+
     // Emit the statement.
-    let match_generator = generators::MatchExtern {
+    let block_result = generators::MatchExtern {
         function: core_jump_nz_func(semantic_db),
         inputs: vec![expr_var],
-        arms: vec![block0_finalized.block, block_otherwise_finalized.block],
+        arms,
         end_info: finalized_merger.end_info.clone(),
-    };
-    let block_result = match_generator.add(ctx, scope);
+    }
+    .add(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -919,13 +929,13 @@ fn lower_error_propagate(
     let arms = zip_eq([ok_variant.clone(), err_variant.clone()], finalized_blocks).collect();
 
     // Emit the statement.
-    let match_generator = generators::MatchEnum {
+    let block_result = generators::MatchEnum {
         input: var,
         concrete_enum_id: ok_variant.concrete_enum_id,
         arms,
         end_info: finalized_merger.end_info.clone(),
-    };
-    let block_result = match_generator.add(ctx, scope);
+    }
+    .add(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -951,11 +961,7 @@ fn lower_optimized_extern_error_propagate(
                         match_extern_variant_arm_input_types(ctx, ok_variant.ty, &extern_enum);
                     merger
                         .run_in_subscope(ctx, input_tys, |ctx, subscope, mut arm_inputs| {
-                            match_extern_arm_ref_args_rebind(
-                                &mut arm_inputs,
-                                &extern_enum,
-                                subscope,
-                            );
+                            match_extern_arm_ref_args_bind(&mut arm_inputs, &extern_enum, subscope);
 
                             let variant_expr = extern_facade_expr(ctx, ok_variant.ty, arm_inputs);
                             Some(BlockScopeEnd::Callsite(Some(variant_expr.var(ctx, subscope))))
@@ -967,11 +973,7 @@ fn lower_optimized_extern_error_propagate(
                         match_extern_variant_arm_input_types(ctx, err_variant.ty, &extern_enum);
                     merger
                         .run_in_subscope(ctx, input_tys, |ctx, subscope, mut arm_inputs| {
-                            match_extern_arm_ref_args_rebind(
-                                &mut arm_inputs,
-                                &extern_enum,
-                                subscope,
-                            );
+                            match_extern_arm_ref_args_bind(&mut arm_inputs, &extern_enum, subscope);
                             let variant_expr = extern_facade_expr(ctx, err_variant.ty, arm_inputs);
                             let input = variant_expr.var(ctx, subscope);
                             let value_var = generators::EnumConstruct {
@@ -996,7 +998,10 @@ fn lower_optimized_extern_error_propagate(
             ])
         },
     );
-    let arms = blocks?.map(|sealed| finalized_merger.finalize_block(ctx, sealed).block).to_vec();
+    let finalized_blocks =
+        blocks?.map(|sealed| finalized_merger.finalize_block(ctx, sealed).block).to_vec();
+    let arms = zip_eq(vec![ok_variant.clone(), err_variant.clone()], finalized_blocks).collect();
+
     let block_result = generators::MatchExtern {
         function: extern_enum.function,
         inputs: extern_enum.inputs,
@@ -1019,8 +1024,8 @@ fn match_extern_variant_arm_input_types(
     chain!(extern_enum.implicits.clone(), ref_tys, variant_input_tys.into_iter()).collect()
 }
 
-/// Rebinds input references when matching on extern functions.
-fn match_extern_arm_ref_args_rebind(
+/// Binds input references and implicits when matching on extern functions.
+fn match_extern_arm_ref_args_bind(
     arm_inputs: &mut Vec<LivingVar>,
     extern_enum: &LoweredExprExternEnum,
     subscope: &mut BlockScope,
@@ -1121,15 +1126,16 @@ fn lowered_expr_from_block_result(
     }
 }
 
-/// Checks that the pattern is an enum pattern for a concrete variant, and returns the semantic
-/// variable id.
+/// Checks that the pattern is an enum variant pattern for a concrete variant, and returns the
+/// semantic variable id.
 fn extract_var_pattern(
     pattern: &semantic::Pattern,
     concrete_variant: &semantic::ConcreteVariant,
 ) -> Option<semantic::VarId> {
-    let enum_pattern = extract_matches!(&pattern, semantic::Pattern::Enum);
-    assert_eq!(&enum_pattern.variant, concrete_variant, "Wrong variant");
-    let var_pattern = extract_matches!(&*enum_pattern.inner_pattern, semantic::Pattern::Variable);
+    let enum_variant_pattern = extract_matches!(&pattern, semantic::Pattern::EnumVariant);
+    assert_eq!(&enum_variant_pattern.variant, concrete_variant, "Wrong variant");
+    let var_pattern =
+        extract_matches!(&*enum_variant_pattern.inner_pattern, semantic::Pattern::Variable);
     let semantic_var_id = semantic::VarId::Local(var_pattern.var.id);
     Some(semantic_var_id)
 }

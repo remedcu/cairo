@@ -187,7 +187,7 @@ impl DebugWithDb<LoweredFormatter<'_>> for StatementMatchExtern {
         writeln!(f, ") {{")?;
         for arm in &self.arms {
             write!(f, "    (")?;
-            let mut inputs = ctx.lowered.blocks[*arm].inputs.iter().peekable();
+            let mut inputs = ctx.lowered.blocks[arm.1].inputs.iter().peekable();
             while let Some(var) = inputs.next() {
                 var.fmt(f, ctx)?;
                 if inputs.peek().is_some() {

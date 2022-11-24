@@ -120,9 +120,9 @@ blk6:
 Inputs: v0: core::felt, v1: core::felt
 Statements:
   (v15: core::felt, v14: test_crate::MyEnum) <- match test_crate::f(v0, v1) {
-    (v2, v3) => blk0,
-    (v5, v6) => blk1,
-    (v9, v10, v11) => blk2,
+    (v2, v3) => (MyEnum::A, blk0),
+    (v5, v6) => (MyEnum::B, blk1),
+    (v9, v10, v11) => (MyEnum::C, blk2),
   }
   () <- match_enum(v14) {
     MyEnum::A => blk3,
@@ -190,9 +190,9 @@ blk3:
 Inputs: v0: core::felt, v1: core::felt
 Statements:
   (v10: core::felt, v9: core::felt) <- match test_crate::f(v0, v1) {
-    (v2, v3) => blk0,
-    (v4, v5) => blk1,
-    (v6, v7, v8) => blk2,
+    (v2, v3) => (MyEnum::A, blk0),
+    (v4, v5) => (MyEnum::B, blk1),
+    (v6, v7, v8) => (MyEnum::C, blk2),
   }
 Drops: v0, v1
 End:
@@ -282,9 +282,9 @@ blk6:
 Inputs: v0: core::RangeCheck, v1: core::felt, v2: core::felt
 Statements:
   (v19: core::RangeCheck, v20: core::felt, v18: test_crate::MyEnum) <- match test_crate::f(v0, v1, v2) {
-    (v3, v4, v5) => blk0,
-    (v7, v8, v9) => blk1,
-    (v12, v13, v14, v15) => blk2,
+    (v3, v4, v5) => (MyEnum::A, blk0),
+    (v7, v8, v9) => (MyEnum::B, blk1),
+    (v12, v13, v14, v15) => (MyEnum::C, blk2),
   }
   () <- match_enum(v18) {
     MyEnum::A => blk3,
@@ -352,9 +352,9 @@ blk3:
 Inputs: v0: core::RangeCheck, v1: core::felt, v2: core::felt
 Statements:
   (v14: core::RangeCheck, v15: core::felt, v13: core::felt) <- match test_crate::f(v0, v1, v2) {
-    (v3, v4, v5) => blk0,
-    (v6, v7, v8) => blk1,
-    (v9, v10, v11, v12) => blk2,
+    (v3, v4, v5) => (MyEnum::A, blk0),
+    (v6, v7, v8) => (MyEnum::B, blk1),
+    (v9, v10, v11, v12) => (MyEnum::C, blk2),
   }
 Drops: v2, v1
 End:

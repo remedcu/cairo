@@ -144,8 +144,8 @@ Statements:
   (v4: core::felt) <- 1u
   (v5: core::felt) <- core::felt_sub(v3, v4)
   (v9: core::felt) <- match core::felt_jump_nz(v5) {
-    () => blk2,
-    (v7) => blk3,
+    () => (JumpNzResult::Zero, blk2),
+    (v7) => (JumpNzResult::NonZero, blk3),
   }
   (v10: core::felt) <- 3u
   (v11: core::felt) <- test_crate::foo(v10)

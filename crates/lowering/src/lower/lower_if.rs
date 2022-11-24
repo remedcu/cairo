@@ -44,11 +44,11 @@ pub fn lower_expr_if(
     log::trace!("Started lowering of an if expression.");
     match analyze_condition(ctx, expr.condition) {
         IfCondition::BoolExpr(_) => lower_expr_if_bool(ctx, scope, expr),
-        IfCondition::Eq(expr_a, expr_b) => lower_expr_if_eq_zero(ctx, scope, expr, expr_a, expr_b),
+        IfCondition::Eq(expr_a, expr_b) => lower_expr_if_eq(ctx, scope, expr, expr_a, expr_b),
     }
 }
 
-/// Lowers an expression of type [semantic::ExprIf].
+/// Lowers an expression of type [semantic::ExprIf], for the case of [IfCondition::Bool].
 pub fn lower_expr_if_bool(
     ctx: &mut LoweringContext<'_>,
     scope: &mut BlockScope,
@@ -83,7 +83,7 @@ pub fn lower_expr_if_bool(
         finalized_merger.finalize_block(ctx, else_block_sealed.ok_or(LoweringFlowError::Failed)?);
 
     // Emit the statement.
-    let match_generator = generators::MatchEnum {
+    let block_result = generators::MatchEnum {
         input: condition_var,
         concrete_enum_id: corelib::core_bool_enum(semantic_db),
         arms: vec![
@@ -91,13 +91,13 @@ pub fn lower_expr_if_bool(
             (corelib::false_variant(semantic_db), else_finalized.block),
         ],
         end_info: finalized_merger.end_info.clone(),
-    };
-    let block_result = match_generator.add(ctx, scope);
+    }
+    .add(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
-/// Lowers an expression of type [semantic::ExprIf].
-pub fn lower_expr_if_eq_zero(
+/// Lowers an expression of type [semantic::ExprIf], for the case of [IfCondition::Eq].
+pub fn lower_expr_if_eq(
     ctx: &mut LoweringContext<'_>,
     scope: &mut BlockScope,
     expr: &semantic::ExprIf,
@@ -150,13 +150,16 @@ pub fn lower_expr_if_eq_zero(
         finalized_merger.finalize_block(ctx, else_block_sealed.ok_or(LoweringFlowError::Failed)?);
 
     // Emit the statement.
-    let match_generator = generators::MatchExtern {
+    let block_result = generators::MatchExtern {
         function: corelib::core_jump_nz_func(semantic_db),
         inputs: vec![condition_var],
-        arms: vec![main_finalized.block, else_finalized.block],
+        arms: vec![
+            (corelib::jump_nz_zero_variant(ctx.db.upcast()), main_finalized.block),
+            (corelib::jump_nz_nonzero_variant(ctx.db.upcast()), else_finalized.block),
+        ],
         end_info: finalized_merger.end_info.clone(),
-    };
-    let block_result = match_generator.add(ctx, scope);
+    }
+    .add(ctx, scope);
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 

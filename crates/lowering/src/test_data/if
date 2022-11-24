@@ -93,8 +93,8 @@ blk2:
 Inputs: v0: core::felt
 Statements:
   (v3: core::felt) <- match core::felt_jump_nz(v0) {
-    () => blk0,
-    (v2) => blk1,
+    () => (JumpNzResult::Zero, blk0),
+    (v2) => (JumpNzResult::NonZero, blk1),
   }
 Drops: v0
 End:
@@ -144,8 +144,8 @@ blk2:
 Inputs: v0: core::felt
 Statements:
   () <- match core::felt_jump_nz(v0) {
-    () => blk0,
-    (v2) => blk1,
+    () => (JumpNzResult::Zero, blk0),
+    (v2) => (JumpNzResult::NonZero, blk1),
   }
   (v3: core::felt) <- 20u
 Drops: v0
@@ -201,8 +201,8 @@ Statements:
   (v5: core::felt) <- core::felt_sub(v2, v3)
   (v6: core::felt) <- core::felt_sub(v4, v5)
   (v10: core::felt) <- match core::felt_jump_nz(v6) {
-    () => blk0,
-    (v8) => blk1,
+    () => (JumpNzResult::Zero, blk0),
+    (v8) => (JumpNzResult::NonZero, blk1),
   }
 Drops: v0, v1, v2, v3, v4, v5, v6
 End:

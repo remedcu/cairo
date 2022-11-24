@@ -126,7 +126,7 @@ impl CallBlock {
 pub struct MatchExtern {
     pub function: semantic::FunctionId,
     pub inputs: Vec<LivingVar>,
-    pub arms: Vec<BlockId>,
+    pub arms: Vec<(ConcreteVariant, BlockId)>,
     pub end_info: BlockEndInfo,
 }
 impl MatchExtern {
@@ -137,7 +137,12 @@ impl MatchExtern {
             .map(|var| scope.living_variables.use_var(ctx, var).var_id())
             .collect();
 
-        // TODO(lior): Check that each arm has the expected input.
+        for (_variant, block_id) in &self.arms {
+            let _input_tys =
+                ctx.blocks[*block_id].inputs.iter().map(|var_id| ctx.variables[*var_id].ty);
+            // TODO(lior/yuval): Check that each arm has the expected input. This currently fails.
+            // itertools::assert_equal([variant.ty].into_iter(), input_tys);
+        }
 
         let (outputs, res) = process_end_info(ctx, scope, self.end_info);
         scope.statements.push(Statement::MatchExtern(StatementMatchExtern {

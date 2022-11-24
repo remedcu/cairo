@@ -94,28 +94,28 @@ fn inner_find_local_variables(
                 let (_, concrete_function_id) =
                     get_concrete_libfunc_id(db, statement_match_extern.function);
                 let libfunc_signature = get_libfunc_signature(db, concrete_function_id);
-                for (block_id, branch_signature) in
+                for (arm, branch_signature) in
                     zip_eq(&statement_match_extern.arms, libfunc_signature.branch_signatures)
                 {
+                    let block_id = arm.1;
                     let mut state_clone = state.clone();
 
                     state_clone.register_outputs(
                         &statement_match_extern.inputs,
-                        &lowered_function.blocks[*block_id].inputs,
+                        &lowered_function.blocks[block_id].inputs,
                         &branch_signature.vars,
                     );
 
                     let inner_known_ap_change = inner_find_local_variables(
                         db,
                         lowered_function,
-                        *block_id,
+                        block_id,
                         state_clone,
                         res,
                     )?;
 
                     // Update reachable_branches and reachable_branches_known_ap_change.
-                    if let lowering::BlockEnd::Callsite(_) = lowered_function.blocks[*block_id].end
-                    {
+                    if let lowering::BlockEnd::Callsite(_) = lowered_function.blocks[block_id].end {
                         reachable_branches += 1;
                         if !inner_known_ap_change {
                             reachable_branches_known_ap_change = false;
