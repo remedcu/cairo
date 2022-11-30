@@ -270,15 +270,13 @@ pub fn unwrap_range_check_based_binary_op_refs(
 ) -> Result<(CellRef, CellRef, CellRef), InvocationError> {
     // Fetches, verifies and returns the range check, a and b references.
     match builder.refs {
-        [
-            ReferenceValue { expression: range_check_expression, .. },
-            ReferenceValue { expression: expr_a, .. },
-            ReferenceValue { expression: expr_b, .. },
-        ] => Ok((
-            try_unpack_deref(range_check_expression)?,
-            try_unpack_deref(expr_a)?,
-            try_unpack_deref(expr_b)?,
-        )),
+        [ReferenceValue { expression: range_check_expression, .. }, ReferenceValue { expression: expr_a, .. }, ReferenceValue { expression: expr_b, .. }] => {
+            Ok((
+                try_unpack_deref(range_check_expression)?,
+                try_unpack_deref(expr_a)?,
+                try_unpack_deref(expr_b)?,
+            ))
+        }
         refs => Err(InvocationError::WrongNumberOfArguments { expected: 3, actual: refs.len() }),
     }
 }
@@ -289,10 +287,9 @@ pub fn get_bool_comparison_target_statement_id(
 ) -> StatementIdx {
     // Fetch the jump target.
     match builder.invocation.branches.as_slice() {
-        [
-            BranchInfo { target: BranchTarget::Fallthrough, .. },
-            BranchInfo { target: BranchTarget::Statement(target_statement_id), .. },
-        ] => *target_statement_id,
+        [BranchInfo { target: BranchTarget::Fallthrough, .. }, BranchInfo { target: BranchTarget::Statement(target_statement_id), .. }] => {
+            *target_statement_id
+        }
         _ => panic!("malformed invocation"),
     }
 }

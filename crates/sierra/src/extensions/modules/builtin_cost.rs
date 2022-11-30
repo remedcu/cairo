@@ -5,11 +5,12 @@ use crate::extensions::lib_func::{
     BranchSignature, DeferredOutputKind, LibFuncSignature, OutputVarInfo, ParamSignature,
     SierraApChange, SignatureSpecializationContext,
 };
+use crate::extensions::types::{InfoOnlyConcreteType, TypeInfo};
 use crate::extensions::{
-    GenericLibFunc, NamedType, OutputVarReferenceInfo, SignatureBasedConcreteLibFunc,
-    SpecializationError,
+    GenericLibFunc, NamedType, NoGenericArgsGenericType, OutputVarReferenceInfo,
+    SignatureBasedConcreteLibFunc, SpecializationError,
 };
-use crate::ids::GenericLibFuncId;
+use crate::ids::{GenericLibFuncId, GenericTypeId};
 use crate::program::GenericArg;
 
 /// Represents different type of costs.
@@ -32,6 +33,28 @@ impl CostTokenType {
             CostTokenType::Pedersen => "pedersen",
         }
         .into()
+    }
+}
+
+/// Type representing the BuiltinCosts builtin, which represents a constant pointer to an array of
+/// costs for each of the builtins.
+#[derive(Default)]
+pub struct BuiltinCostsType {}
+impl NoGenericArgsGenericType for BuiltinCostsType {
+    type Concrete = InfoOnlyConcreteType;
+    const ID: GenericTypeId = GenericTypeId::new_inline("BuiltinCosts");
+
+    fn specialize(&self) -> Self::Concrete {
+        InfoOnlyConcreteType {
+            info: TypeInfo {
+                long_id: Self::concrete_type_long_id(&[]),
+                storable: true,
+                droppable: false,
+                // TODO(lior): Should duplicatable be true?
+                duplicatable: false,
+                size: 1,
+            },
+        }
     }
 }
 
