@@ -154,6 +154,7 @@ fn format_path(
     recursion_depth: usize,
     config: &FormatterConfig,
 ) -> bool {
+    log::trace!("Formatting {path}");
     match fs::metadata(path) {
         // File exists
         Ok(metadata) => {
@@ -234,7 +235,7 @@ struct FormatterArgs {
 }
 
 fn main() -> ExitCode {
-    init_logging(log::LevelFilter::Off);
+    init_logging(log::LevelFilter::Trace);
     log::info!("Starting formatting.");
 
     let args = FormatterArgs::parse();

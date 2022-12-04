@@ -109,6 +109,11 @@ impl SyntaxNodeFormat for SyntaxNode {
     }
 
     fn force_line_break(&self, db: &dyn SyntaxGroup) -> bool {
+        log::trace!(
+            "yg force_line_break, kind: {}, parent: {:?}",
+            self.kind(db),
+            parent_kind(db, self),
+        );
         match self.kind(db) {
             SyntaxKind::StatementLet
             | SyntaxKind::StatementExpr
@@ -129,7 +134,17 @@ impl SyntaxNodeFormat for SyntaxNode {
                 true
             }
             SyntaxKind::TerminalLBrace => {
-                matches!(parent_kind(db, self), Some(SyntaxKind::ExprBlock | SyntaxKind::ExprMatch))
+                log::trace!("yg in here");
+                matches!(
+                    parent_kind(db, self),
+                    Some(
+                        SyntaxKind::ExprBlock
+                            | SyntaxKind::ExprMatch
+                            // TODO(yg): should also indent. Should also break line in the end of the trait body...
+                            | SyntaxKind::TraitBody
+                            | SyntaxKind::ImplBody
+                    )
+                )
             }
             _ => false,
         }
