@@ -347,7 +347,7 @@ impl<'db> Resolver<'db> {
                     .db
                     .module_item_by_name(*module_id, ident)
                     .on_none(|| diagnostics.report(identifier, PathNotFound))?;
-                let generic_item = self.module_item_to_generic_item(module_item)?;
+                let generic_item = self.module_item_to_generic_item(diagnostics, module_item)?;
                 Some(self.specialize_generic_module_item(
                     diagnostics,
                     identifier,
@@ -457,7 +457,7 @@ impl<'db> Resolver<'db> {
                     .db
                     .module_item_by_name(*module_id, ident)
                     .on_none(|| diagnostics.report(identifier, PathNotFound))?;
-                self.module_item_to_generic_item(module_item)
+                self.module_item_to_generic_item(diagnostics, module_item)
             }
             ResolvedGenericItem::GenericType(GenericTypeId::Enum(enum_id)) => {
                 let variants = self
@@ -485,6 +485,7 @@ impl<'db> Resolver<'db> {
     /// Wraps a ModuleItem with the corresponding ResolveGenericItem.
     fn module_item_to_generic_item(
         &mut self,
+        diagnostics: &mut SemanticDiagnostics,
         module_item: ModuleItemId,
     ) -> Option<ResolvedGenericItem> {
         Some(match module_item {
@@ -492,8 +493,10 @@ impl<'db> Resolver<'db> {
             ModuleItemId::Use(id) => {
                 // TODO(spapini): Right now we call priv_use_semantic_data() directly for cycle
                 // handling. Otherwise, we need to handle cycle both on it and on the selector
-                // use_resolved_item(). Fix this,
-                self.db.priv_use_semantic_data(id)?.resolved_item?
+                // use_resolved_item(). Fix this.
+                // TODO(yg): other places?
+                diagnostics.diagnostics.extend(self.db.use_semantic_diagnostics(id));
+                self.db.use_resolved_item(id)?
             }
             ModuleItemId::FreeFunction(id) => {
                 ResolvedGenericItem::GenericFunction(GenericFunctionId::Free(id))
