@@ -36,10 +36,18 @@ impl SemanticVariableEntry {
             SemanticVariableEntry::Moved => None,
         }
     }
+
+    /// TODO(yg): doc
+    pub fn is_alive(self) -> bool {
+        match self {
+            SemanticVariableEntry::Alive(_) => true,
+            SemanticVariableEntry::Moved => false,
+        }
+    }
 }
 
 /// Holds on to the [LivingVar] instance for semantic variables.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SemanticVariablesMap {
     /// Mapping from a semantic variable to its current liveness state.
     pub var_mapping: OrderedHashMap<semantic::VarId, SemanticVariableEntry>,
@@ -76,7 +84,12 @@ impl SemanticVariablesMap {
         semantic_var_id: semantic::VarId,
         var: LivingVar,
     ) -> &mut SemanticVariableEntry {
-        self.var_mapping.insert(semantic_var_id, SemanticVariableEntry::Alive(var));
-        self.var_mapping.get_mut(&semantic_var_id).unwrap()
+        match self.var_mapping.insert(semantic_var_id, SemanticVariableEntry::Alive(var)) {
+            Some(_) => log::info!("yg put existing key updated"),
+            None => log::info!("yg put key did not exist"),
+        }
+        let x = self.var_mapping.get_mut(&semantic_var_id).unwrap();
+        log::info!("yg put returning {x:?}");
+        x
     }
 }

@@ -1,0 +1,37 @@
+(TODO(yg): remove this file. This only a coredumb of the conclusions of how to properly solve this issue - unless we refactor lowering in which case it's not needed)
+
+Correct lowering of:
+-----------------------
+//! > function
+func foo(mut arr: Array::<felt>, mut b: (felt,)) -> Array::<felt> {
+    let y = match f(arr, b) {
+        MyEnum::A(x) => arr
+    };
+    y
+}
+
+//! > module_code
+enum MyEnum {
+  A: felt,
+}
+extern func f(ref arr: Array::<felt>, ref b: (felt,)) -> MyEnum nopanic;
+----------------------------------
+(need to apply logic explained in TODO here: https://github.com/starkware-libs/cairo/blob/main/crates/lowering/src/lower.rs#L507 (long todo in lower_expr_function_call()))
+
+blk0:
+Inputs: v2, v3, v4: core::felt,
+Statements:
+Drops: v4
+End:
+  Callsite(v3, v2)
+
+blk1 (root):
+Inputs: v0: core::array::Array::<core::felt>, v1: (core::felt,)
+Statements:
+  (v6: (felt,), v5: core::array::Array::<core::felt>) <- match test::f(v0, v1) {
+    (v2, v3, v4) => blk0,
+  }
+Drops: v1, v2, v3
+End:
+  Callsite(v5)
+

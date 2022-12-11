@@ -170,7 +170,7 @@ fn lower_block(
     }
 }
 
-/// Lowers an expression that is either a complete block, or the end (tail expreesion) of a
+/// Lowers an expression that is either a complete block, or the end (tail expression) of a
 /// block.
 pub fn lower_tail_expr(
     ctx: &mut LoweringContext<'_>,
@@ -448,10 +448,15 @@ fn lower_expr_function_call(
 
     // TODO(spapini): Use the correct stable pointer.
     let arg_inputs = lower_exprs_as_vars(ctx, &expr.args, scope)?;
+    log::info!(
+        "yg before living_variables.len() = {}",
+        scope.living_variables.living_variables.len()
+    );
     let (ref_tys, ref_inputs): (_, Vec<LivingVar>) = expr
         .ref_args
         .iter()
         .map(|semantic_var_id| {
+            log::info!("yg lower_expr_function_call taking semantic var: {:?}", *semantic_var_id);
             Ok((
                 ctx.semantic_defs[*semantic_var_id].ty(),
                 take_semantic_var(ctx, scope, *semantic_var_id, expr.stable_ptr.untyped())?,
@@ -460,6 +465,10 @@ fn lower_expr_function_call(
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .unzip();
+    log::info!(
+        "yg after living_variables.len() = {}",
+        scope.living_variables.living_variables.len()
+    );
     let callee_implicit_types =
         ctx.db.function_all_implicits(expr.function).ok_or(LoweringFlowError::Failed)?;
     let implicits = callee_implicit_types
@@ -490,6 +499,7 @@ fn lower_expr_function_call(
                 function: expr.function,
                 concrete_enum_id,
                 inputs,
+                ref_tys,
                 ref_args: expr.ref_args.clone(),
                 implicits: callee_implicit_types,
             }));
@@ -502,10 +512,15 @@ fn lower_expr_function_call(
     let (implicit_outputs, ref_outputs, res) =
         perform_function_call(ctx, scope, expr.function, inputs, ref_tys, expr_ty)?;
 
+    log::trace!(
+        "yg lower_expr_function_call rebinding... num implicits: {}",
+        implicit_outputs.len()
+    );
     // Rebind the implicits.
     for (implicit_type, implicit_output) in zip_eq(callee_implicit_types, implicit_outputs) {
         scope.put_implicit(implicit_type, implicit_output);
     }
+    log::trace!("yg lower_expr_function_call rebinding... num refs: {}", ref_outputs.len());
     // Rebind the ref variables.
     for (semantic_var_id, output_var) in zip_eq(&expr.ref_args, ref_outputs) {
         scope.put_semantic_variable(*semantic_var_id, output_var);
@@ -536,6 +551,18 @@ fn perform_function_call(
         return Ok((call_result.implicit_outputs, call_result.ref_outputs, res));
     };
 
+    // Extern function.
+    perform_extern_function_call(ctx, scope, function, inputs, ref_tys, ret_ty)
+}
+
+fn perform_extern_function_call(
+    ctx: &mut LoweringContext<'_>,
+    scope: &mut BlockScope,
+    function: semantic::FunctionId,
+    inputs: Vec<LivingVar>,
+    ref_tys: Vec<semantic::TypeId>,
+    ret_ty: semantic::TypeId,
+) -> Result<(Vec<LivingVar>, Vec<LivingVar>, LoweredExpr), LoweringFlowError> {
     // Extern function.
     let ret_tys = extern_facade_return_tys(ctx, ret_ty);
     let call_result = generators::Call { function, inputs, ref_tys, ret_tys }.add(ctx, scope);
@@ -571,23 +598,31 @@ fn lower_expr_match(
     scope: &mut BlockScope,
 ) -> Result<LoweredExpr, LoweringFlowError> {
     log::trace!("Lowering a match expression: {:?}", expr.debug(&ctx.expr_formatter));
-    let lowered_expr = lower_expr(ctx, scope, expr.matched_expr)?;
+    let lowered_match_expr = lower_expr(ctx, scope, expr.matched_expr)?;
+    log::info!("yg finished lowering the matched expr");
 
     if ctx.function_def.exprs[expr.matched_expr].ty() == ctx.db.core_felt_ty() {
-        let var = lowered_expr.var(ctx, scope)?;
+        let var = lowered_match_expr.var(ctx, scope)?;
         return lower_expr_match_felt(ctx, expr, var, scope);
     }
 
     // TODO(spapini): Use diagnostics.
     // TODO(spapini): Handle more than just enums.
-    if let LoweredExpr::ExternEnum(extern_enum) = lowered_expr {
-        return lower_optimized_extern_match(ctx, scope, extern_enum, &expr.arms);
+    if let LoweredExpr::ExternEnum(extern_enum) = lowered_match_expr {
+        let matched_expr_type = ctx.function_def.exprs[expr.matched_expr].ty();
+        return lower_optimized_extern_match(
+            ctx,
+            scope,
+            extern_enum,
+            &expr.arms,
+            matched_expr_type,
+        );
     }
 
     let (concrete_enum_id, concrete_variants) = extract_concrete_enum(ctx, expr)?;
-    let expr_var = lowered_expr.var(ctx, scope)?;
 
     // Merge arm blocks.
+    // TODO(yg): in a separate PR - rename to blocks
     let (res, mut finalized_merger) =
         BlockFlowMerger::with(ctx, scope, &[], |ctx, merger| -> Result<_, LoweringFlowError> {
             // Create a sealed block for each arm.
@@ -622,14 +657,20 @@ fn lower_expr_match(
                 });
             block_opts.collect::<Option<Vec<_>>>().ok_or(LoweringFlowError::Failed)
         });
-    let finalized_blocks =
-        res?.into_iter().map(|sealed| finalized_merger.finalize_block(ctx, sealed).block);
+    // TODO(ygg): sealed blocks are different. In optimized, the input to the arm block is the
+    // param. which is moved (see meld). This is wrong. Why does it happen in optimized but not
+    // here? It also happens only with a tail expr, not with a block with return...
+    let finalized_blocks = res?.into_iter().map(|sealed| {
+        log::info!("yg sealed block not optimized: {:?}", sealed);
+        finalized_merger.finalize_block(ctx, sealed).block
+    });
 
     let arms = zip_eq(concrete_variants, finalized_blocks).collect();
 
     // Emit the statement.
     let block_result = (generators::MatchEnum {
-        input: expr_var,
+        // TODO(yg): in this PR, revert expr_var here. In a separate PR, inline it here...
+        input: lowered_match_expr.var(ctx, scope)?,
         concrete_enum_id,
         arms,
         end_info: finalized_merger.end_info.clone(),
@@ -644,8 +685,64 @@ fn lower_optimized_extern_match(
     scope: &mut BlockScope,
     extern_enum: LoweredExprExternEnum,
     match_arms: &[semantic::MatchArm],
+    matched_expr_type: semantic::TypeId,
 ) -> Result<LoweredExpr, LoweringFlowError> {
     log::trace!("Started lowering of an optimized extern match.");
+
+    // Perform function call.
+    log::trace!("TODO(yg): performing the function call.");
+    let may_panic =
+        ctx.db.function_may_panic(extern_enum.function).ok_or(LoweringFlowError::Failed)?;
+    let matched_expr_type = if may_panic {
+        get_panic_ty(ctx.db.upcast(), matched_expr_type)
+    } else {
+        matched_expr_type
+    };
+
+    log::trace!(
+        "yg introducing new vars for arms. living_variables.len() = {}, ids: {:?}",
+        scope.living_variables.living_variables.len(),
+        scope.living_variables.living_variables
+    );
+    // TODO(yuval): handle returns, to allow binding of the result of the matched expr, e.g. with @
+    // like in Rust.
+    let inputs = extern_enum
+        .inputs
+        .into_iter()
+        .map(|var| scope.living_variables.use_var(ctx, var).var_id())
+        .collect();
+    let implicit_outputs = ctx
+        .db
+        .function_all_implicits(extern_enum.function)
+        .unwrap()
+        .into_iter()
+        .map(|ty| scope.living_variables.introduce_new_var(ctx, ty))
+        .collect_vec();
+    let ref_outputs = extern_enum
+        .ref_tys
+        .into_iter()
+        .map(|ty| scope.living_variables.introduce_new_var(ctx, ty))
+        .collect_vec();
+    log::trace!(
+        "yg finished introducing new vars for arms. living_variables.living_variables.len() = {}, \
+         ids: {:?}",
+        scope.living_variables.living_variables.len(),
+        scope.living_variables.living_variables
+    );
+
+    log::trace!("TODO(yg): rebinding the matched expr semantic vars/implicits.");
+    // Rebind the implicits.
+    log::trace!("yg rebinding implicits");
+    for (implicit_type, implicit_output) in zip_eq(&extern_enum.implicits, implicit_outputs) {
+        scope.put_implicit(*implicit_type, implicit_output);
+    }
+    log::trace!("yg rebinding semantic vars");
+    // Rebind the ref variables.
+    for (semantic_var_id, output_var) in zip_eq(&extern_enum.ref_args, ref_outputs) {
+        scope.put_semantic_variable(*semantic_var_id, output_var);
+    }
+    log::trace!("yg done rebinding");
+
     let concrete_variants = ctx.db.concrete_enum_variants(extern_enum.concrete_enum_id).unwrap();
     if match_arms.len() != concrete_variants.len() {
         return Err(LoweringFlowError::Failed);
@@ -654,7 +751,10 @@ fn lower_optimized_extern_match(
     let (blocks, mut finalized_merger) = BlockFlowMerger::with(
         ctx,
         scope,
-        &extern_enum.ref_args,
+        // TODO(yg): document - we don't want to pass the ref arguments to the arms. If they need
+        // something, they can pull it.
+        // &extern_enum.ref_args,
+        &vec![],
         |ctx, merger| -> Result<_, LoweringFlowError> {
             // Create a sealed block for each arm.
             let block_opts =
@@ -662,7 +762,9 @@ fn lower_optimized_extern_match(
                     let input_tys = match_extern_variant_arm_input_types(
                         ctx,
                         concrete_variant.ty,
-                        &extern_enum,
+                        &extern_enum.implicits,
+                        // &extern_enum.ref_args,
+                        &vec![],
                     );
 
                     // Create a scope for the arm block.
@@ -674,7 +776,13 @@ fn lower_optimized_extern_match(
                         assert_eq!(&enum_pattern.variant, concrete_variant, "Wrong variant");
 
                         // Bind the arm inputs to implicits and semantic variables.
-                        match_extern_arm_ref_args_bind(&mut arm_inputs, &extern_enum, subscope);
+                        match_extern_arm_ref_args_bind(
+                            &mut arm_inputs,
+                            &extern_enum.implicits,
+                            // &extern_enum.ref_args,
+                            &vec![],
+                            subscope,
+                        );
 
                         let variant_expr = extern_facade_expr(ctx, concrete_variant.ty, arm_inputs);
                         match lower_single_pattern(
@@ -697,18 +805,24 @@ fn lower_optimized_extern_match(
 
     let finalized_blocks = blocks?
         .into_iter()
-        .map(|sealed| finalized_merger.finalize_block(ctx, sealed).block)
+        .map(|sealed| {
+            log::info!("yg sealed block optimized: {:?}", sealed);
+            finalized_merger.finalize_block(ctx, sealed).block
+        })
         .collect_vec();
     let arms = zip_eq(concrete_variants, finalized_blocks).collect();
 
     // Emit the statement.
     let block_result = generators::MatchExtern {
         function: extern_enum.function,
-        inputs: extern_enum.inputs,
+        inputs,
         arms,
         end_info: finalized_merger.end_info.clone(),
     }
     .add(ctx, scope);
+    // TODO(ygg): rebind is done only after everything!! We need to rebind after evaluating the
+    // matched expr! (but still - why doesn't it happen with return?) - compare return to tail expr
+    // in meld...
     lowered_expr_from_block_result(scope, block_result, finalized_merger)
 }
 
@@ -770,10 +884,16 @@ fn lower_expr_match_felt(
     let arms = zip_eq(concrete_variants, [block0_finalized.block, block_otherwise_finalized.block])
         .collect();
 
+    // TODO(yg): optimize?
+    let inputs = vec![expr_var]
+        .into_iter()
+        .map(|var| scope.living_variables.use_var(ctx, var).var_id())
+        .collect();
+
     // Emit the statement.
     let block_result = (generators::MatchExtern {
         function: core_jump_nz_func(semantic_db),
-        inputs: vec![expr_var],
+        inputs,
         arms,
         end_info: finalized_merger.end_info.clone(),
     })
@@ -1030,11 +1150,20 @@ fn lower_optimized_extern_error_propagate(
         |ctx, merger| -> Result<_, LoweringFlowError> {
             Ok([
                 {
-                    let input_tys =
-                        match_extern_variant_arm_input_types(ctx, ok_variant.ty, &extern_enum);
+                    let input_tys = match_extern_variant_arm_input_types(
+                        ctx,
+                        ok_variant.ty,
+                        &extern_enum.implicits,
+                        &extern_enum.ref_args,
+                    );
                     merger
                         .run_in_subscope(ctx, input_tys, |ctx, subscope, mut arm_inputs| {
-                            match_extern_arm_ref_args_bind(&mut arm_inputs, &extern_enum, subscope);
+                            match_extern_arm_ref_args_bind(
+                                &mut arm_inputs,
+                                &extern_enum.implicits,
+                                &extern_enum.ref_args,
+                                subscope,
+                            );
 
                             let variant_expr = extern_facade_expr(ctx, ok_variant.ty, arm_inputs);
                             Some(BlockScopeEnd::Callsite(Some(
@@ -1044,11 +1173,20 @@ fn lower_optimized_extern_error_propagate(
                         .ok_or(LoweringFlowError::Failed)?
                 },
                 {
-                    let input_tys =
-                        match_extern_variant_arm_input_types(ctx, err_variant.ty, &extern_enum);
+                    let input_tys = match_extern_variant_arm_input_types(
+                        ctx,
+                        err_variant.ty,
+                        &extern_enum.implicits,
+                        &extern_enum.ref_args,
+                    );
                     merger
                         .run_in_subscope(ctx, input_tys, |ctx, subscope, mut arm_inputs| {
-                            match_extern_arm_ref_args_bind(&mut arm_inputs, &extern_enum, subscope);
+                            match_extern_arm_ref_args_bind(
+                                &mut arm_inputs,
+                                &extern_enum.implicits,
+                                &extern_enum.ref_args,
+                                subscope,
+                            );
                             let variant_expr = extern_facade_expr(ctx, err_variant.ty, arm_inputs);
                             let input = variant_expr.var(ctx, subscope).ok()?;
                             let value_var = generators::EnumConstruct {
@@ -1077,9 +1215,15 @@ fn lower_optimized_extern_error_propagate(
         blocks?.map(|sealed| finalized_merger.finalize_block(ctx, sealed).block).to_vec();
     let arms = zip_eq(vec![ok_variant.clone(), err_variant.clone()], finalized_blocks).collect();
 
+    let inputs = extern_enum
+        .inputs
+        .into_iter()
+        .map(|var| scope.living_variables.use_var(ctx, var).var_id())
+        .collect();
+
     let block_result = generators::MatchExtern {
         function: extern_enum.function,
-        inputs: extern_enum.inputs,
+        inputs,
         arms,
         end_info: finalized_merger.end_info.clone(),
     }
@@ -1091,28 +1235,30 @@ fn lower_optimized_extern_error_propagate(
 fn match_extern_variant_arm_input_types(
     ctx: &mut LoweringContext<'_>,
     ty: semantic::TypeId,
-    extern_enum: &LoweredExprExternEnum,
+    extern_enum_implicits: &Vec<semantic::TypeId>,
+    extern_enum_refs: &Vec<VarId>,
 ) -> Vec<semantic::TypeId> {
     let variant_input_tys = extern_facade_return_tys(ctx, ty);
     let ref_tys =
-        extern_enum.ref_args.iter().map(|semantic_var_id| ctx.semantic_defs[*semantic_var_id].ty());
-    chain!(extern_enum.implicits.clone(), ref_tys, variant_input_tys.into_iter()).collect()
+        extern_enum_refs.iter().map(|semantic_var_id| ctx.semantic_defs[*semantic_var_id].ty());
+    chain!(extern_enum_implicits.clone(), ref_tys, variant_input_tys.into_iter()).collect()
 }
 
 /// Binds input references and implicits when matching on extern functions.
 fn match_extern_arm_ref_args_bind(
     arm_inputs: &mut Vec<LivingVar>,
-    extern_enum: &LoweredExprExternEnum,
+    extern_enum_implicits: &Vec<semantic::TypeId>,
+    extern_enum_refs: &Vec<VarId>,
     subscope: &mut BlockScope,
 ) {
-    let implicit_outputs: Vec<_> = arm_inputs.drain(0..extern_enum.implicits.len()).collect();
+    let implicit_outputs: Vec<_> = arm_inputs.drain(0..extern_enum_implicits.len()).collect();
     // Bind the implicits.
-    for (ty, output_var) in zip_eq(&extern_enum.implicits, implicit_outputs) {
+    for (ty, output_var) in zip_eq(extern_enum_implicits, implicit_outputs) {
         subscope.put_implicit(*ty, output_var);
     }
-    let ref_outputs: Vec<_> = arm_inputs.drain(0..extern_enum.ref_args.len()).collect();
+    let ref_outputs: Vec<_> = arm_inputs.drain(0..extern_enum_refs.len()).collect();
     // Bind the ref variables.
-    for (semantic_var_id, output_var) in zip_eq(&extern_enum.ref_args, ref_outputs) {
+    for (semantic_var_id, output_var) in zip_eq(extern_enum_refs, ref_outputs) {
         subscope.put_semantic_variable(*semantic_var_id, output_var);
     }
 }
@@ -1142,6 +1288,7 @@ fn use_semantic_var(
     stable_ptr: SyntaxStablePtrId,
 ) -> Result<LivingVar, LoweringFlowError> {
     scope.use_semantic_variable(ctx, semantic_var).take_var().ok_or_else(|| {
+        log::info!("yg failed using semantic var");
         ctx.diagnostics.report(stable_ptr, VariableMoved);
         LoweringFlowError::Failed
     })

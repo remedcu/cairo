@@ -126,19 +126,13 @@ impl CallBlock {
 /// Generator for [StatementMatchExtern].
 pub struct MatchExtern {
     pub function: semantic::FunctionId,
-    pub inputs: Vec<LivingVar>,
+    pub inputs: Vec<VariableId>,
     /// The arms of the match. Order must be identical to the order in the definition of the enum.
     pub arms: Vec<(ConcreteVariant, BlockId)>,
     pub end_info: BlockEndInfo,
 }
 impl MatchExtern {
     pub fn add(self, ctx: &mut LoweringContext<'_>, scope: &mut BlockScope) -> CallBlockResult {
-        let inputs = self
-            .inputs
-            .into_iter()
-            .map(|var| scope.living_variables.use_var(ctx, var).var_id())
-            .collect();
-
         for (variant, block_id) in &self.arms {
             let variant_facade_types = extern_facade_return_tys(ctx, variant.ty);
             let block_input_tys =
@@ -152,9 +146,17 @@ impl MatchExtern {
                 .expect("Expected an extern function");
             let num_implicits =
                 ctx.db.extern_function_declaration_implicits(extern_function_id).unwrap().len();
-            let num_refs =
+            let mut num_refs =
                 ctx.db.extern_function_declaration_refs(extern_function_id).unwrap().len();
+            // TODO(yg): if this works, dimply remove num_refs.
+            num_refs = 0;
+            log::info!("yg add: num_implicits: {num_implicits}, num_refs: {num_refs}");
             let total_extra_inputs = num_implicits + num_refs;
+            log::info!(
+                "yg add: variant_facade_types: {:?}",
+                variant_facade_types.clone().into_iter()
+            );
+            log::info!("yg add: block_input_tys: {:?}", block_input_tys.clone().into_iter());
             itertools::assert_equal(
                 variant_facade_types.into_iter(),
                 block_input_tys.skip(total_extra_inputs),
@@ -164,7 +166,7 @@ impl MatchExtern {
         let (outputs, res) = process_end_info(ctx, scope, self.end_info);
         scope.statements.push(Statement::MatchExtern(StatementMatchExtern {
             function: self.function,
-            inputs,
+            inputs: self.inputs,
             arms: self.arms,
             outputs,
         }));

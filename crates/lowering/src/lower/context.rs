@@ -93,6 +93,7 @@ pub struct LoweredExprExternEnum {
     pub function: semantic::FunctionId,
     pub concrete_enum_id: semantic::ConcreteEnumId,
     pub inputs: Vec<LivingVar>,
+    pub ref_tys: Vec<semantic::TypeId>,
     pub ref_args: Vec<semantic::VarId>,
     /// The implicits used/changed by the function.
     pub implicits: Vec<semantic::TypeId>,
@@ -156,9 +157,15 @@ impl LoweredExprExternEnum {
             .collect();
         let arms = zip_eq(concrete_variants, finalized_blocks).collect();
 
+        let inputs = self
+            .inputs
+            .into_iter()
+            .map(|var| scope.living_variables.use_var(ctx, var).var_id())
+            .collect();
+
         let call_block_result = generators::MatchExtern {
             function: function_id,
-            inputs: self.inputs,
+            inputs,
             arms,
             end_info: finalized_merger.end_info.clone(),
         }

@@ -154,10 +154,16 @@ pub fn lower_expr_if_eq(
     let else_finalized =
         finalized_merger.finalize_block(ctx, else_block_sealed.ok_or(LoweringFlowError::Failed)?);
 
+    // TODO(yg): optimize?
+    let inputs = vec![condition_var]
+        .into_iter()
+        .map(|var| scope.living_variables.use_var(ctx, var).var_id())
+        .collect();
+
     // Emit the statement.
     let block_result = (generators::MatchExtern {
         function: corelib::core_jump_nz_func(semantic_db),
-        inputs: vec![condition_var],
+        inputs,
         arms: vec![
             (corelib::jump_nz_zero_variant(ctx.db.upcast()), main_finalized.block),
             (corelib::jump_nz_nonzero_variant(ctx.db.upcast()), else_finalized.block),

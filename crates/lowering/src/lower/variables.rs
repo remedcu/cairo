@@ -19,6 +19,7 @@ impl LivingVar {
 }
 
 /// Wrapper around VariableId, which result from "using" or "taking" a living variable.
+#[derive(Debug)]
 pub struct UsableVariable(VariableId);
 impl UsableVariable {
     /// Retrieves the [VariableId] of this var.
@@ -28,10 +29,10 @@ impl UsableVariable {
 }
 
 /// Maintains the set of living variables at a certain scope.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct LivingVariables {
     /// The set of living variables.
-    living_variables: OrderedHashSet<VariableId>,
+    pub living_variables: OrderedHashSet<VariableId>,
 }
 impl LivingVariables {
     /// Gets a variable, removing from `living_variables` if not duplicatable.
