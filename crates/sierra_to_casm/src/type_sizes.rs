@@ -21,6 +21,7 @@ pub fn get_type_size_map(
             CoreTypeConcrete::Felt(_)
             | CoreTypeConcrete::GasBuiltin(_)
             | CoreTypeConcrete::BuiltinCosts(_)
+            | CoreTypeConcrete::Nullable(_)
             | CoreTypeConcrete::Uint128(_)
             | CoreTypeConcrete::RangeCheck(_)
             | CoreTypeConcrete::Box(_)
