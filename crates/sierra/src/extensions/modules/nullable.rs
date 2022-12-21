@@ -42,6 +42,7 @@ define_libfunc_hierarchy! {
     pub enum NullableLibFunc {
         Null(NullLibFunc),
         IntoNullable(IntoNullableLibFunc),
+        FromNullable(FromNullableLibFunc),
     }, NullableConcreteLibFunc
 }
 
@@ -88,5 +89,39 @@ impl SignatureOnlyGenericLibFunc for IntoNullableLibFunc {
             }],
             SierraApChange::Known { new_vars_only: true },
         ))
+    }
+}
+
+/// LibFunc for converting Nullable<T> to Option<Box<T>>.
+#[derive(Default)]
+pub struct FromNullableLibFunc {}
+impl SignatureOnlyGenericLibFunc for FromNullableLibFunc {
+    const ID: GenericLibFuncId = GenericLibFuncId::new_inline("from_nullable");
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<LibFuncSignature, SpecializationError> {
+        let ty = as_single_type(args)?;
+        Ok(LibFuncSignature {
+            param_signatures: vec![ParamSignature::new(
+                context.get_wrapped_concrete_type(NullableType::id(), ty.clone())?,
+            )],
+            branch_signatures: vec![
+                BranchSignature {
+                    vars: vec![OutputVarInfo {
+                        ty,
+                        ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+                    }],
+                    ap_change: SierraApChange::Known { new_vars_only: false }, // TODO(lior): Fix.
+                },
+                BranchSignature {
+                    vars: vec![],
+                    ap_change: SierraApChange::Known { new_vars_only: false }, // TODO(lior): Fix.
+                },
+            ],
+            fallthrough: Some(0),
+        })
     }
 }
