@@ -41,27 +41,38 @@ test::foo@0() -> (Nullable<felt>);
 run_small_e2e_test
 
 //! > cairo
-func foo(x: Box::<felt>) -> Nullable::<felt> {
-    into_nullable::<felt>(x)
+func foo() -> Nullable::<felt> {
+    into_nullable::<felt>(into_box::<felt>(7))
 }
 
 //! > casm
-[ap + 0] = [fp + -3], ap++;
+[ap + 0] = 7, ap++;
+%{ memory[ap + 0] = segments.add() %}
+[ap + -1] = [[ap + 0] + 0], ap++;
+[ap + 0] = [ap + -1], ap++;
 ret;
 
 //! > function_costs
-test::foo: OrderedHashMap({Step: 1})
+test::foo: OrderedHashMap({Step: 3})
 
 //! > sierra_code
 type felt = felt;
 type Box<felt> = Box<felt>;
 type Nullable<felt> = Nullable<felt>;
 
+libfunc felt_const<7> = felt_const<7>;
+libfunc store_temp<felt> = store_temp<felt>;
+libfunc into_box<felt> = into_box<felt>;
+libfunc store_temp<Box<felt>> = store_temp<Box<felt>>;
 libfunc into_nullable<felt> = into_nullable<felt>;
 libfunc store_temp<Nullable<felt>> = store_temp<Nullable<felt>>;
 
-into_nullable<felt>([0]) -> ([1]);
-store_temp<Nullable<felt>>([1]) -> ([2]);
-return([2]);
+felt_const<7>() -> ([0]);
+store_temp<felt>([0]) -> ([0]);
+into_box<felt>([0]) -> ([1]);
+store_temp<Box<felt>>([1]) -> ([1]);
+into_nullable<felt>([1]) -> ([2]);
+store_temp<Nullable<felt>>([2]) -> ([3]);
+return([3]);
 
-test::foo@0([0]: Box<felt>) -> (Nullable<felt>);
+test::foo@0() -> (Nullable<felt>);
