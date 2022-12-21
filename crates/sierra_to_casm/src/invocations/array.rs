@@ -98,18 +98,18 @@ fn build_array_append(
 fn build_array_at(
     builder: CompiledInvocationBuilder<'_>,
 ) -> Result<CompiledInvocation, InvocationError> {
-    let (range_check, array_view, element_size, index) = match builder.refs {
+    let (range_check, array_view, element_size, index_deref_or_imm) = match builder.refs {
         [
             ReferenceValue { expression: expr_range_check, .. },
             ReferenceValue { expression: expr_arr, .. },
-            ReferenceValue { expression: expr_value, .. },
+            ReferenceValue { expression: expr_index, .. },
         ] => {
             let concrete_array_type = &builder.libfunc.param_signatures()[0].ty;
             let array_element_size = builder.program_info.type_sizes[concrete_array_type];
             let array_view =
                 ArrayView::try_get_view(expr_arr, &builder.program_info, concrete_array_type)
                     .map_err(|_| InvocationError::InvalidReferenceExpressionForArgument)?;
-            let elem_value = match expr_value
+            let index_deref_or_imm = match expr_index
                 .try_unpack_single()
                 .map_err(|_| InvocationError::InvalidReferenceExpressionForArgument)?
             {
@@ -117,7 +117,12 @@ fn build_array_at(
                 CellExpression::Immediate(op) => DerefOrImmediate::from(op),
                 _ => return Err(InvocationError::InvalidReferenceExpressionForArgument),
             };
-            (try_unpack_deref(expr_range_check)?, array_view, array_element_size, elem_value)
+            (
+                try_unpack_deref(expr_range_check)?,
+                array_view,
+                array_element_size,
+                index_deref_or_imm
+            )
         }
         refs => {
             return Err(InvocationError::WrongNumberOfArguments {
@@ -133,7 +138,7 @@ fn build_array_at(
     }
 
     let mut casm_builder = CasmBuilder::default();
-    let index = casm_builder.add_var(match index {
+    let index = casm_builder.add_var(match index_deref_or_imm {
         DerefOrImmediate::Immediate(imm) => ResOperand::Immediate(imm),
         DerefOrImmediate::Deref(cell) => ResOperand::Deref(cell),
     });
