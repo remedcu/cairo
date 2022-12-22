@@ -8,8 +8,8 @@ mod TestContract {
 
     #[external]
     func test(ref system: System, ref arg: felt, arg1: felt, arg2: felt) -> felt {
-        let x = super::my_storage_var::read(system);
-        super::my_storage_var::write(system, x + 1);
+        let x = my_storage_var::read(system);
+        // super::__generated__TestContract::my_storage_var::write(system, x + 1);
         x + internal_func(system)
     }
 }

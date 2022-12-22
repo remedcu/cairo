@@ -32,11 +32,11 @@ utils = { path = "../utils" }
 lowering = { path = "../lowering" }
 plugins = { path = "../plugins" }
 parser = { path = "../parser" }
+formatter = { path = "../formatter" }
 
 [dev-dependencies]
 diagnostics = { path = "../diagnostics" }
 env_logger.workspace = true
-formatter = { path = "../formatter" }
 indoc.workspace = true
 pretty_assertions.workspace = true
 semantic = { path = "../semantic", features = ["testing"] }

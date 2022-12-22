@@ -4,6 +4,7 @@ mod test;
 
 use std::iter::Peekable;
 
+use debug::DebugWithDb;
 use defs::ids::{
     GenericFunctionId, GenericParamId, GenericTypeId, ImplId, LanguageElementId, ModuleFileId,
     ModuleId, ModuleItemId, TraitId,
@@ -166,7 +167,15 @@ impl<'db> Resolver<'db> {
         let mut segments = elements_vec.iter().peekable();
 
         // Find where the first segment lies in.
+        println!("yg, resolving {}", path.as_syntax_node().get_text(syntax_db));
+        println!("yg, current module {}", self.module_file_id.0.full_path(self.db.upcast()));
         let mut item = self.resolve_concrete_path_first_segment(diagnostics, &mut segments)?;
+        match item {
+            ResolvedConcreteItem::Module(module) => {
+                println!("yg, item {}", module.full_path(self.db.upcast()))
+            }
+            _ => {}
+        }
 
         // Follow modules.
         while segments.peek().is_some() {

@@ -278,6 +278,11 @@ fn module_data(db: &dyn DefsGroup, module_id: ModuleId) -> Maybe<ModuleData> {
                 ast::Item::Module(module) => {
                     let item_id =
                         db.intern_submodule(SubmoduleLongId(module_file_id, module.stable_ptr()));
+                    println!(
+                        "yg module: {}, submodule: {}",
+                        module_id.full_path(db),
+                        item_id.full_path(db)
+                    );
                     res.submodules.insert(item_id, module);
                 }
                 ast::Item::Use(us) => {

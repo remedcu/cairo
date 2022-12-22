@@ -58,10 +58,10 @@ fn handle_mod(db: &dyn SyntaxGroup, module_ast: ast::ItemModule) -> PluginResult
     let contract_name = module_ast.name(db).text(db).to_string();
     let mut generated_external_functions = rust::Tokens::new();
 
-    let mut storage_code = "".to_string();
+    let mut storage_code = rust::Tokens::new();
     let mut original_items = rust::Tokens::new();
     for item in body.items(db).elements(db) {
-        match &item {
+        let copy_orig_item = match &item {
             ast::Item::FreeFunction(item_function)
                 if item_function
                     .attributes(db)
@@ -69,26 +69,27 @@ fn handle_mod(db: &dyn SyntaxGroup, module_ast: ast::ItemModule) -> PluginResult
                     .iter()
                     .any(|attr| attr.attr(db).text(db) == EXTERNAL_ATTR) =>
             {
-                {
-                    // TODO(ilya): propagate the diagnostics in case of failure.
-                    if let Some(generated_function) =
-                        generate_entry_point_wrapper(db, item_function)
-                    {
-                        generated_external_functions.append(generated_function);
-                    }
+                // TODO(ilya): propagate the diagnostics in case of failure.
+                if let Some(generated_function) = generate_entry_point_wrapper(db, item_function) {
+                    generated_external_functions.append(generated_function);
                 }
+                true
             }
             ast::Item::Struct(item_struct) if item_struct.name(db).text(db) == "Storage" => {
-                storage_code = handle_storage_struct(db, item_struct.clone());
+                storage_code.append(handle_storage_struct(db, item_struct.clone()));
+                false
             }
-            _ => {}
+            _ => true,
         };
-        let orig_text = item.as_syntax_node().get_text(db);
-        original_items.append(quote! {$orig_text})
+        if copy_orig_item {
+            let orig_text = item.as_syntax_node().get_text(db);
+            original_items.append(quote! {$orig_text})
+        }
     }
 
-    let external_entry_points: rust::Tokens = quote! {
+    let generated_contract_mod: rust::Tokens = quote! {
         mod __generated__$contract_name {
+            $storage_code
             $original_items
             mod $EXTERNAL_MODULE {
                 $generated_external_functions
@@ -96,12 +97,14 @@ fn handle_mod(db: &dyn SyntaxGroup, module_ast: ast::ItemModule) -> PluginResult
         }
     };
 
-    let contract_code = format!("{}\n{}", storage_code, external_entry_points.to_string().unwrap());
-
+    println!(
+        "yg contract code:\n{}",
+        formatter::format_string(db, generated_contract_mod.to_string().unwrap())
+    );
     PluginResult {
         code: Some(PluginGeneratedFile {
             name: "contract".into(),
-            content: contract_code,
+            content: generated_contract_mod.to_string().unwrap(),
             diagnostic_mapper: DynDiagnosticMapper::new(TrivialMapper {}),
         }),
         diagnostics: vec![],
