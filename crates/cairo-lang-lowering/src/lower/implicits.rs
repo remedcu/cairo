@@ -14,7 +14,14 @@ pub fn function_scc_representative(
     db: &dyn LoweringGroup,
     function: FreeFunctionId,
 ) -> SCCRepresentative {
-    SCCRepresentative(db.function_scc(function).into_iter().min().unwrap_or(function))
+    let defs_db = db.upcast();
+    SCCRepresentative(
+        // TODO(yg): separate PR... Compare full path or find another way to stably compare...
+        db.function_scc(function)
+            .into_iter()
+            .min_by(|x, y| x.name(defs_db).cmp(&y.name(defs_db)))
+            .unwrap_or(function),
+    )
 }
 
 /// Query implementation of [crate::db::LoweringGroup::function_scc_explicit_implicits].
